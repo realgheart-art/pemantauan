@@ -9,6 +9,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
     --navy-950:#0a1628; --navy-900:#0f2038; --navy-800:#16304f; --navy-700:#1e4066;
@@ -113,6 +118,36 @@
   .hidden{display:none !important;}
   .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:8px;}
   @media(max-width:900px){.charts-grid{grid-template-columns:1fr;} nav.side{width:64px;} nav.side .navitem span.txt{display:none;} .content{padding:18px;}}
+
+  /* ===== NOTIF BADGE ===== */
+  .nav-badge{background:var(--bad);color:#fff;font-size:10.5px;font-weight:700;border-radius:10px;padding:1px 7px;margin-left:auto;}
+  .navitem{justify-content:flex-start;}
+
+  /* ===== BUTTONS: EXPORT / PDF ===== */
+  .action-bar{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
+  .btn-outline{background:#fff;border:1.5px solid var(--navy-800);color:var(--navy-800);padding:9px 16px;border-radius:8px;font-weight:600;font-size:13px;display:inline-flex;align-items:center;gap:6px;}
+  .btn-outline:hover{background:var(--navy-900);color:#fff;}
+  .btn-gold{background:var(--brass);border:none;color:var(--navy-950);padding:9px 16px;border-radius:8px;font-weight:700;font-size:13px;display:inline-flex;align-items:center;gap:6px;}
+  .btn-gold:hover{background:var(--brass-dark);color:#fff;}
+
+  /* ===== PETA ===== */
+  #peta-container{height:560px;border-radius:var(--radius);overflow:hidden;border:1px solid var(--line);}
+  .peta-legend{display:flex;gap:18px;margin-bottom:14px;font-size:12.5px;color:var(--navy-800);flex-wrap:wrap;}
+  .peta-legend span{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:11px;height:11px;border-radius:50%;display:inline-block;}
+  .dot.belum{background:#9aa5b5;} .dot.sikit{background:var(--warn);} .dot.kerap{background:var(--ok);}
+
+  /* ===== TINDAK SUSUL ===== */
+  .status-pill{padding:4px 12px;border-radius:20px;font-size:11.5px;font-weight:700;border:none;}
+  .status-pill.belum{background:#fbe4e1;color:var(--bad);}
+  .status-pill.dalam{background:#fdefd8;color:var(--warn);}
+  .status-pill.selesai{background:#e3f2e8;color:var(--ok);}
+  .tindak-card{background:#fff;border:1px solid var(--line);border-left:4px solid var(--bad);border-radius:12px;padding:16px 18px;margin-bottom:12px;}
+  .tindak-card.selesai{border-left-color:var(--ok);}
+  .tindak-card.dalam{border-left-color:var(--warn);}
+  .tindak-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;}
+  .settings-card{background:var(--cream);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+  .settings-card input{width:80px;}
 </style>
 </head>
 <body>
@@ -205,9 +240,12 @@ function initShell() {
     sidebar.innerHTML = `
       <div class="navitem active" data-view="dashboard" onclick="nav('dashboard')">📊 <span class="txt">Dashboard</span></div>
       <div class="navitem" data-view="senarai" onclick="nav('senarai')">📋 <span class="txt">Senarai Pemantauan</span></div>
+      <div class="navitem" data-view="peta" onclick="nav('peta')">🗺️ <span class="txt">Peta Sekolah</span></div>
+      <div class="navitem" data-view="tindaksusul" onclick="nav('tindaksusul')">🔔 <span class="txt">Tindak Susul</span> <span class="nav-badge hidden" id="badge-tindaksusul"></span></div>
       <div class="navitem" data-view="urus" onclick="nav('urus')">⚙️ <span class="txt">Urus Kategori & Item</span></div>
     `;
     nav('dashboard');
+    muatBadgeTindakSusul();
   } else {
     sidebar.innerHTML = `
       <div class="navitem active" data-view="pilihsekolah" onclick="nav('pilihsekolah')">🏫 <span class="txt">Buat Pemantauan</span></div>
@@ -224,6 +262,15 @@ function nav(view) {
   else if (view === 'senarai') renderSenarai();
   else if (view === 'urus') renderUrusKategori();
   else if (view === 'pilihsekolah') renderPilihSekolah();
+  else if (view === 'peta') renderPetaSekolah();
+  else if (view === 'tindaksusul') renderTindakSusul();
+}
+
+async function muatBadgeTindakSusul() {
+  const result = await callApi('getNotifikasiBadge', {});
+  const badge = document.getElementById('badge-tindaksusul');
+  if (result.belumTindakan > 0) { badge.textContent = result.belumTindakan; badge.classList.remove('hidden'); }
+  else badge.classList.add('hidden');
 }
 
 /* ================= PEGAWAI: PILIH SEKOLAH ================= */
@@ -327,19 +374,29 @@ async function hantarPemantauan() {
 /* ================= SENARAI PEMANTAUAN (Admin & Pegawai) ================= */
 async function renderSenarai() {
   const c = document.getElementById('content');
+  const adminBtns = CURRENT_USER.peranan === 'Admin'
+    ? `<button class="btn-gold" onclick="janaLaporanKeseluruhan()">📄 Laporan Keseluruhan JPN (PDF)</button>`
+    : '';
   c.innerHTML = `<h2>Senarai Pemantauan</h2><p class="lede">Rekod lawatan pemantauan yang telah dihantar.</p>
     <div class="filters">
       <input type="date" id="f-tarikh-dari"><input type="date" id="f-tarikh-hingga">
       <button onclick="muatSenarai()" style="background:var(--navy-900);color:#fff;border:none;border-radius:8px;padding:0 16px;">Tapis</button>
     </div>
+    <div class="action-bar">
+      <button class="btn-outline" onclick="eksportSenaraiExcel()">⬇️ Eksport Excel</button>
+      ${adminBtns}
+    </div>
     <div id="senarai-table">Memuatkan...</div>`;
   muatSenarai();
 }
+
+let SENARAI_TERKINI = [];
 
 async function muatSenarai() {
   const payload = { tarikhDari: document.getElementById('f-tarikh-dari')?.value, tarikhHingga: document.getElementById('f-tarikh-hingga')?.value };
   if (CURRENT_USER.peranan !== 'Admin') payload.pegawaiId = CURRENT_USER.id;
   const list = await callApi('getPemantauanList', payload);
+  SENARAI_TERKINI = list;
   document.getElementById('senarai-table').innerHTML = `
     <table><thead><tr><th>Sekolah</th><th>Pegawai Pemantau</th><th>Tarikh & Masa</th><th>Status</th><th></th></tr></thead>
     <tbody>${list.map(p => `<tr>
@@ -347,18 +404,45 @@ async function muatSenarai() {
       <td><span class="officer-tag">👤 ${p.namaPegawai}</span></td>
       <td>${new Date(p.tarikhMasa).toLocaleString('ms-MY')}</td>
       <td>${p.status}</td>
-      <td><button onclick="lihatDetail(${p.id})" style="background:none;border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:12px;">Lihat</button></td>
+      <td style="white-space:nowrap;">
+        <button onclick="lihatDetail(${p.id})" style="background:none;border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:12px;">Lihat</button>
+        <button onclick="janaLaporanLawatan(${p.id})" style="background:none;border:1px solid var(--brass-dark);color:var(--brass-dark);border-radius:8px;padding:6px 12px;font-size:12px;">PDF</button>
+      </td>
     </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);">Tiada rekod.</td></tr>'}</tbody></table>`;
+}
+
+function eksportSenaraiExcel() {
+  if (SENARAI_TERKINI.length === 0) { alert('Tiada data untuk dieksport.'); return; }
+  const data = SENARAI_TERKINI.map(p => ({
+    'Kod Sekolah': p.kodSekolah, 'Nama Sekolah': p.namaSekolah, 'Pegawai Pemantau': p.namaPegawai,
+    'Tarikh & Masa': new Date(p.tarikhMasa).toLocaleString('ms-MY'), 'Status': p.status
+  }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Senarai Pemantauan');
+  XLSX.writeFile(wb, `Senarai_Pemantauan_${Utilities_formatTarikhFail()}.xlsx`);
+}
+
+function Utilities_formatTarikhFail() {
+  const d = new Date();
+  return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
 }
 
 async function lihatDetail(id) {
   const result = await callApi('getPemantauanDetail', { id });
   const p = result.pemantauan;
   const rows = result.dapatan.map(d => `<tr><td>${d.kategori}</td><td>${d.perkara}</td><td>${d.skala}/5</td><td>${d.catatan || '-'}</td><td>${d.linkGambar ? `<a href="${d.linkGambar}" target="_blank">Lihat</a>` : '-'}</td></tr>`).join('');
+  const laporanSekolahBtn = CURRENT_USER.peranan === 'Admin'
+    ? `<button class="btn-outline" onclick="janaLaporanSekolah('${p.kodSekolah}','${p.namaSekolah.replace(/'/g,"\\'")}')">📄 Laporan Penuh Sekolah Ini (PDF)</button>`
+    : '';
   document.getElementById('content').innerHTML = `
     <button onclick="nav('senarai')" style="background:none;border:none;color:var(--navy-800);font-weight:600;margin-bottom:14px;">← Kembali ke Senarai</button>
     <h2>${p.namaSekolah}</h2>
     <p class="lede">${p.kodSekolah} · ${p.ppd} · Dipantau oleh <b>${p.namaPegawai}</b> pada ${new Date(p.tarikhMasa).toLocaleString('ms-MY')}</p>
+    <div class="action-bar">
+      <button class="btn-gold" onclick="janaLaporanLawatan(${p.id})">📄 Muat Turun Laporan Lawatan Ini (PDF)</button>
+      ${laporanSekolahBtn}
+    </div>
     <table><thead><tr><th>Kategori</th><th>Perkara</th><th>Skor</th><th>Catatan</th><th>Gambar</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
@@ -425,6 +509,289 @@ async function tambahItem(kategoriId) {
   await callApi('addItem', { kategoriId, perkara });
   KATEGORI_DATA = await callApi('getKategoriPenuh');
   renderKategoriManage();
+}
+
+/* ================= PETA SEKOLAH (Admin) ================= */
+let PETA_INSTANCE = null;
+
+async function renderPetaSekolah() {
+  const c = document.getElementById('content');
+  c.innerHTML = `<h2>Peta Sekolah</h2><p class="lede">Taburan sekolah mengikut status & kekerapan pemantauan.</p>
+    <div class="peta-legend">
+      <span><span class="dot belum"></span> Belum dipantau</span>
+      <span><span class="dot sikit"></span> 1–2 kali dipantau</span>
+      <span><span class="dot kerap"></span> 3 kali atau lebih</span>
+    </div>
+    <div id="peta-container"></div>`;
+  const data = await callApi('getPetaStats', {});
+  if (PETA_INSTANCE) { PETA_INSTANCE.remove(); PETA_INSTANCE = null; }
+  PETA_INSTANCE = L.map('peta-container').setView([6.12, 100.37], 10); // pusat Kedah
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(PETA_INSTANCE);
+
+  data.forEach(s => {
+    const warna = s.bilangan === 0 ? '#9aa5b5' : (s.bilangan <= 2 ? '#c9862b' : '#3f8f5f');
+    const marker = L.circleMarker([s.lat, s.lng], { radius: 7, fillColor: warna, color: '#fff', weight: 1.5, fillOpacity: .9 }).addTo(PETA_INSTANCE);
+    const tarikh = s.tarikhTerakhir ? new Date(s.tarikhTerakhir).toLocaleDateString('ms-MY') : 'Tiada';
+    marker.bindPopup(`<b>${s.namaSekolah}</b><br>${s.kodSekolah} · ${s.ppd}<br>Bilangan dipantau: <b>${s.bilangan}</b><br>Lawatan terakhir: ${tarikh}`);
+  });
+}
+
+/* ================= TINDAK SUSUL (Admin) ================= */
+async function renderTindakSusul() {
+  const c = document.getElementById('content');
+  const tetapan = await callApi('getTetapan', {});
+  c.innerHTML = `<h2>Tindak Susul — Skor Kritikal</h2><p class="lede">Dapatan berskor kritikal memerlukan catatan tindakan intervensi.</p>
+    <div class="settings-card">
+      <span style="font-weight:600;font-size:13px;color:var(--navy-800);">Ambang Skor Kritikal (≤):</span>
+      <input type="number" id="ambang-input" min="1" max="5" value="${tetapan.AmbangKritikal || 2}">
+      <button class="btn-outline" onclick="simpanAmbang()">Simpan Tetapan</button>
+    </div>
+    <div class="filters">
+      <select id="f-status" onchange="muatTindakSusul()">
+        <option value="">Semua Status</option>
+        <option value="Belum Tindakan">Belum Tindakan</option>
+        <option value="Dalam Tindakan">Dalam Tindakan</option>
+        <option value="Selesai">Selesai</option>
+      </select>
+    </div>
+    <div class="action-bar"><button class="btn-outline" onclick="eksportTindakSusulExcel()">⬇️ Eksport Excel</button></div>
+    <div id="tindaksusul-list">Memuatkan...</div>`;
+  muatTindakSusul();
+}
+
+async function simpanAmbang() {
+  const value = document.getElementById('ambang-input').value;
+  await callApi('updateTetapan', { key: 'AmbangKritikal', value: Number(value) });
+  alert('Ambang skor kritikal dikemaskini kepada ' + value + '.');
+}
+
+let TINDAKSUSUL_TERKINI = [];
+
+async function muatTindakSusul() {
+  const status = document.getElementById('f-status')?.value || '';
+  const list = await callApi('getTindakSusulList', { status });
+  TINDAKSUSUL_TERKINI = list;
+  const statusClass = s => s === 'Selesai' ? 'selesai' : (s === 'Dalam Tindakan' ? 'dalam' : 'belum');
+  document.getElementById('tindaksusul-list').innerHTML = list.map(t => `
+    <div class="tindak-card ${statusClass(t.status)}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <b>${t.namaSekolah}</b> <span style="color:var(--muted);font-size:12px;">(${t.kodSekolah})</span><br>
+          <span style="font-size:13px;">[${t.kategori}] ${t.perkara} — Skor <b>${t.skala}/5</b></span><br>
+          <span style="font-size:11.5px;color:var(--muted);">Direkodkan: ${new Date(t.tarikhDapatan).toLocaleString('ms-MY')}</span>
+        </div>
+        <span class="status-pill ${statusClass(t.status)}">${t.status}</span>
+      </div>
+      <div class="tindak-grid">
+        <div><label style="margin:8px 0 4px;">Pegawai Bertanggungjawab</label><input type="text" id="pbt-${t.id}" value="${t.pegawaiBertanggungjawab || ''}"></div>
+        <div><label style="margin:8px 0 4px;">Status</label>
+          <select id="status-${t.id}">
+            <option value="Belum Tindakan" ${t.status==='Belum Tindakan'?'selected':''}>Belum Tindakan</option>
+            <option value="Dalam Tindakan" ${t.status==='Dalam Tindakan'?'selected':''}>Dalam Tindakan</option>
+            <option value="Selesai" ${t.status==='Selesai'?'selected':''}>Selesai</option>
+          </select>
+        </div>
+      </div>
+      <label style="margin:10px 0 4px;">Catatan Tindakan Intervensi</label>
+      <textarea id="catatan-${t.id}" placeholder="Cth: Perbincangan dengan GB, susulan lawatan pada...">${t.catatanTindakan || ''}</textarea>
+      <div style="margin-top:10px;text-align:right;"><button class="btn-outline" onclick="simpanTindakSusul(${t.id})">Simpan</button></div>
+    </div>
+  `).join('') || '<p style="color:var(--muted);">Tiada rekod skor kritikal.</p>';
+}
+
+async function simpanTindakSusul(id) {
+  await callApi('updateTindakSusul', {
+    id,
+    status: document.getElementById(`status-${id}`).value,
+    catatanTindakan: document.getElementById(`catatan-${id}`).value,
+    pegawaiBertanggungjawab: document.getElementById(`pbt-${id}`).value
+  });
+  alert('Tindak susul dikemaskini.');
+  muatTindakSusul();
+  muatBadgeTindakSusul();
+}
+
+function eksportTindakSusulExcel() {
+  if (TINDAKSUSUL_TERKINI.length === 0) { alert('Tiada data untuk dieksport.'); return; }
+  const data = TINDAKSUSUL_TERKINI.map(t => ({
+    'Sekolah': t.namaSekolah, 'Kod': t.kodSekolah, 'Kategori': t.kategori, 'Perkara': t.perkara, 'Skor': t.skala,
+    'Tarikh Direkodkan': new Date(t.tarikhDapatan).toLocaleString('ms-MY'), 'Status': t.status,
+    'Pegawai Bertanggungjawab': t.pegawaiBertanggungjawab || '', 'Catatan Tindakan': t.catatanTindakan || ''
+  }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Tindak Susul');
+  XLSX.writeFile(wb, `TindakSusul_${Utilities_formatTarikhFail()}.xlsx`);
+}
+
+/* ================= PENJANA PDF (guna jsPDF + Chart.js) ================= */
+let LOGO_BASE64_CACHE = null;
+
+async function getLogoBase64() {
+  if (LOGO_BASE64_CACHE) return LOGO_BASE64_CACHE;
+  try {
+    const res = await fetch('logo.png');
+    const blob = await res.blob();
+    LOGO_BASE64_CACHE = await new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) { LOGO_BASE64_CACHE = null; }
+  return LOGO_BASE64_CACHE;
+}
+
+function chartToImage(type, data, options, width = 560, height = 260) {
+  return new Promise(resolve => {
+    const canvas = document.createElement('canvas');
+    canvas.width = width; canvas.height = height;
+    canvas.style.display = 'none';
+    document.body.appendChild(canvas);
+    const chart = new Chart(canvas, { type, data, options: Object.assign({ animation: false, responsive: false }, options) });
+    setTimeout(() => {
+      const img = canvas.toDataURL('image/png');
+      chart.destroy();
+      canvas.remove();
+      resolve(img);
+    }, 300);
+  });
+}
+
+async function tambahKepalaSurat(doc, tajuk, subtajuk) {
+  const logo = await getLogoBase64();
+  if (logo) doc.addImage(logo, 'PNG', 14, 10, 20, 20);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(15, 32, 56);
+  doc.text('JABATAN PENDIDIKAN NEGERI KEDAH', 40, 16);
+  doc.setFontSize(15);
+  doc.text(tajuk, 40, 24);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(100);
+  doc.text(subtajuk, 40, 30);
+  doc.setDrawColor(200, 162, 74); doc.setLineWidth(1);
+  doc.line(14, 35, 196, 35);
+  return 42; // Y permulaan kandungan
+}
+
+// --- Laporan 1 Sesi Lawatan ---
+async function janaLaporanLawatan(pemantauanId) {
+  const result = await callApi('getPemantauanDetail', { id: pemantauanId });
+  const p = result.pemantauan;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  let y = await tambahKepalaSurat(doc, 'Laporan Pemantauan Sekolah', `${p.namaSekolah} (${p.kodSekolah}) · ${p.ppd}`);
+
+  doc.setFontSize(10); doc.setTextColor(30);
+  doc.text(`Pegawai Pemantau: ${p.namaPegawai}`, 14, y);
+  doc.text(`Tarikh/Masa: ${new Date(p.tarikhMasa).toLocaleString('ms-MY')}`, 14, y + 6);
+  y += 14;
+
+  // Purata skor ikut kategori untuk lawatan ini
+  const purataKat = {};
+  result.dapatan.forEach(d => {
+    if (!purataKat[d.kategori]) purataKat[d.kategori] = { total: 0, n: 0 };
+    purataKat[d.kategori].total += Number(d.skala); purataKat[d.kategori].n += 1;
+  });
+  const labels = Object.keys(purataKat);
+  const nilai = labels.map(k => (purataKat[k].total / purataKat[k].n).toFixed(2));
+
+  const chartImg = await chartToImage('bar',
+    { labels, datasets: [{ label: 'Purata Skor', data: nilai, backgroundColor: '#c8a24a' }] },
+    { scales: { y: { min: 0, max: 5 } }, plugins: { legend: { display: false } } });
+  doc.addImage(chartImg, 'PNG', 14, y, 182, 80);
+  y += 88;
+
+  doc.autoTable({
+    startY: y,
+    head: [['Kategori', 'Perkara', 'Skor', 'Catatan']],
+    body: result.dapatan.map(d => [d.kategori, d.perkara, `${d.skala}/5`, d.catatan || '-']),
+    styles: { fontSize: 8.5 }, headStyles: { fillColor: [15, 32, 56] }
+  });
+
+  doc.save(`Laporan_Lawatan_${p.kodSekolah}_${Utilities_formatTarikhFail()}.pdf`);
+}
+
+// --- Laporan 1 Sekolah (semua lawatan) — Admin ---
+async function janaLaporanSekolah(kodSekolah, namaSekolah) {
+  const data = await callApi('getLaporanSekolah', { kodSekolah });
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  let y = await tambahKepalaSurat(doc, 'Laporan Penuh Sekolah', `${namaSekolah} (${kodSekolah}) — ${data.lawatan.length} sesi pemantauan`);
+
+  if (data.lawatan.length > 0) {
+    // Trend line: purata skor keseluruhan setiap lawatan (rentas semua kategori)
+    const labels = data.lawatan.map(l => new Date(l.tarikhMasa).toLocaleDateString('ms-MY'));
+    const purataKeseluruhan = data.lawatan.map(l => {
+      const total = l.purataKategori.reduce((s, k) => s + k.purata, 0);
+      return (total / (l.purataKategori.length || 1)).toFixed(2);
+    });
+    const chartImg = await chartToImage('line',
+      { labels, datasets: [{ label: 'Purata Skor Keseluruhan', data: purataKeseluruhan, borderColor: '#0f2038', backgroundColor: 'rgba(15,32,56,.1)', fill: true, tension: .3 }] },
+      { scales: { y: { min: 0, max: 5 } }, plugins: { legend: { display: false } } });
+    doc.addImage(chartImg, 'PNG', 14, y, 182, 80);
+    y += 88;
+
+    doc.autoTable({
+      startY: y,
+      head: [['Tarikh', 'Pegawai', 'Bil. Item Disemak', 'Purata Skor']],
+      body: data.lawatan.map((l, i) => [new Date(l.tarikhMasa).toLocaleDateString('ms-MY'), l.namaPegawai, l.jumlahItem, purataKeseluruhan[i]]),
+      styles: { fontSize: 8.5 }, headStyles: { fillColor: [15, 32, 56] }
+    });
+    y = doc.lastAutoTable.finalY + 10;
+  } else {
+    doc.setFontSize(11); doc.text('Tiada sejarah pemantauan bagi sekolah ini.', 14, y); y += 10;
+  }
+
+  if (data.tindakSusulBelumSelesai.length > 0) {
+    if (y > 250) { doc.addPage(); y = 20; }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(181, 71, 58);
+    doc.text('Tindak Susul Belum Selesai', 14, y); y += 6;
+    doc.autoTable({
+      startY: y,
+      head: [['Kategori', 'Perkara', 'Skor', 'Status']],
+      body: data.tindakSusulBelumSelesai.map(t => [t.kategori, t.perkara, `${t.skala}/5`, t.status]),
+      styles: { fontSize: 8.5 }, headStyles: { fillColor: [181, 71, 58] }
+    });
+  }
+
+  doc.save(`Laporan_Sekolah_${kodSekolah}_${Utilities_formatTarikhFail()}.pdf`);
+}
+
+// --- Laporan Keseluruhan JPN — Admin ---
+async function janaLaporanKeseluruhan() {
+  const data = await callApi('getLaporanKeseluruhan', {});
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  let y = await tambahKepalaSurat(doc, 'Laporan Keseluruhan Pemantauan Sekolah', `Ringkasan JPN Kedah — ${data.jumlahSekolahKeseluruhan} sekolah berdaftar`);
+
+  doc.setFontSize(10); doc.setTextColor(30);
+  doc.text(`Jumlah Pemantauan Dijalankan: ${data.ringkasan.jumlahPemantauan}`, 14, y);
+  doc.text(`Sekolah Telah Dipantau: ${data.ringkasan.jumlahSekolahDipantau} / ${data.jumlahSekolahKeseluruhan}`, 14, y + 6);
+  doc.text(`Tindak Susul Belum Selesai: ${data.tindakSusulBelumSelesai}`, 14, y + 12);
+  y += 20;
+
+  const chartImg = await chartToImage('bar',
+    { labels: data.ringkasan.purataKategori.map(k => k.kategori), datasets: [{ label: 'Purata Skor', data: data.ringkasan.purataKategori.map(k => k.purata), backgroundColor: '#c8a24a' }] },
+    { scales: { y: { min: 0, max: 5 } }, plugins: { legend: { display: false } } });
+  doc.addImage(chartImg, 'PNG', 14, y, 182, 80);
+  y += 88;
+
+  const trendImg = await chartToImage('line',
+    { labels: data.ringkasan.trendBulanan.map(t => t.bulan), datasets: [{ label: 'Bilangan Lawatan', data: data.ringkasan.trendBulanan.map(t => t.bilangan), borderColor: '#0f2038', backgroundColor: 'rgba(15,32,56,.1)', fill: true, tension: .3 }] },
+    { plugins: { legend: { display: false } } });
+  if (y > 190) { doc.addPage(); y = 20; }
+  doc.addImage(trendImg, 'PNG', 14, y, 182, 80);
+  y += 88;
+
+  if (y > 220) { doc.addPage(); y = 20; }
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(15, 32, 56);
+  doc.text('10 Sekolah Dengan Purata Skor Terendah', 14, y); y += 6;
+  doc.autoTable({
+    startY: y,
+    head: [['Sekolah', 'Kod', 'Purata Skor']],
+    body: data.sekolahPalingLemah.map(s => [s.namaSekolah, s.kodSekolah, s.purata.toFixed(2)]),
+    styles: { fontSize: 8.5 }, headStyles: { fillColor: [15, 32, 56] }
+  });
+
+  doc.save(`Laporan_Keseluruhan_JPN_${Utilities_formatTarikhFail()}.pdf`);
 }
 </script>
 </body>
