@@ -25,7 +25,14 @@
   *{box-sizing:border-box;}
   body{margin:0;font-family:'Plus Jakarta Sans',sans-serif;background:var(--cream);color:var(--ink);}
   h1,h2,h3,.brand{font-family:'Fraunces',serif;}
-  button{font-family:inherit;cursor:pointer;}
+  button{font-family:inherit;cursor:pointer;transition:transform .08s ease, box-shadow .15s ease, background .15s ease, opacity .15s ease;}
+  button:active{transform:scale(.94);}
+  button:disabled{opacity:.6;cursor:progress;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .btn-spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px;}
+  .btn-outline .btn-spinner{border-color:rgba(15,32,56,.3);border-top-color:var(--navy-900);}
+  @keyframes pop{0%{transform:scale(1);}50%{transform:scale(1.04);}100%{transform:scale(1);}}
+  .btn-pop{animation:pop .25s ease;}
   .app{min-height:100vh;display:flex;flex-direction:column;}
 
   /* ===== HEADER ===== */
@@ -375,7 +382,7 @@ async function hantarPemantauan() {
 async function renderSenarai() {
   const c = document.getElementById('content');
   const adminBtns = CURRENT_USER.peranan === 'Admin'
-    ? `<button class="btn-gold" onclick="janaLaporanKeseluruhan()">📄 Laporan Keseluruhan JPN (PDF)</button>`
+    ? `<button class="btn-gold" onclick="dgnLoading(this,'Menjana PDF...',()=>janaLaporanKeseluruhan())">📄 Laporan Keseluruhan JPN (PDF)</button>`
     : '';
   c.innerHTML = `<h2>Senarai Pemantauan</h2><p class="lede">Rekod lawatan pemantauan yang telah dihantar.</p>
     <div class="filters">
@@ -383,7 +390,7 @@ async function renderSenarai() {
       <button onclick="muatSenarai()" style="background:var(--navy-900);color:#fff;border:none;border-radius:8px;padding:0 16px;">Tapis</button>
     </div>
     <div class="action-bar">
-      <button class="btn-outline" onclick="eksportSenaraiExcel()">⬇️ Eksport Excel</button>
+      <button class="btn-outline" onclick="dgnLoading(this,'Mengeksport...',()=>eksportSenaraiExcel())">⬇️ Eksport Excel</button>
       ${adminBtns}
     </div>
     <div id="senarai-table">Memuatkan...</div>`;
@@ -406,7 +413,7 @@ async function muatSenarai() {
       <td>${p.status}</td>
       <td style="white-space:nowrap;">
         <button onclick="lihatDetail(${p.id})" style="background:none;border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:12px;">Lihat</button>
-        <button onclick="janaLaporanLawatan(${p.id})" style="background:none;border:1px solid var(--brass-dark);color:var(--brass-dark);border-radius:8px;padding:6px 12px;font-size:12px;">PDF</button>
+        <button onclick="dgnLoading(this,'PDF...',()=>janaLaporanLawatan(${p.id}))" style="background:none;border:1px solid var(--brass-dark);color:var(--brass-dark);border-radius:8px;padding:6px 12px;font-size:12px;">PDF</button>
       </td>
     </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);">Tiada rekod.</td></tr>'}</tbody></table>`;
 }
@@ -433,14 +440,14 @@ async function lihatDetail(id) {
   const p = result.pemantauan;
   const rows = result.dapatan.map(d => `<tr><td>${d.kategori}</td><td>${d.perkara}</td><td>${d.skala}/5</td><td>${d.catatan || '-'}</td><td>${d.linkGambar ? `<a href="${d.linkGambar}" target="_blank">Lihat</a>` : '-'}</td></tr>`).join('');
   const laporanSekolahBtn = CURRENT_USER.peranan === 'Admin'
-    ? `<button class="btn-outline" onclick="janaLaporanSekolah('${p.kodSekolah}','${p.namaSekolah.replace(/'/g,"\\'")}')">📄 Laporan Penuh Sekolah Ini (PDF)</button>`
+    ? `<button class="btn-outline" onclick="dgnLoading(this,'Menjana PDF...',()=>janaLaporanSekolah('${p.kodSekolah}','${p.namaSekolah.replace(/'/g,"\\'")}'))">📄 Laporan Penuh Sekolah Ini (PDF)</button>`
     : '';
   document.getElementById('content').innerHTML = `
     <button onclick="nav('senarai')" style="background:none;border:none;color:var(--navy-800);font-weight:600;margin-bottom:14px;">← Kembali ke Senarai</button>
     <h2>${p.namaSekolah}</h2>
     <p class="lede">${p.kodSekolah} · ${p.ppd} · Dipantau oleh <b>${p.namaPegawai}</b> pada ${new Date(p.tarikhMasa).toLocaleString('ms-MY')}</p>
     <div class="action-bar">
-      <button class="btn-gold" onclick="janaLaporanLawatan(${p.id})">📄 Muat Turun Laporan Lawatan Ini (PDF)</button>
+      <button class="btn-gold" onclick="dgnLoading(this,'Menjana PDF...',()=>janaLaporanLawatan(${p.id}))">📄 Muat Turun Laporan Lawatan Ini (PDF)</button>
       ${laporanSekolahBtn}
     </div>
     <table><thead><tr><th>Kategori</th><th>Perkara</th><th>Skor</th><th>Catatan</th><th>Gambar</th></tr></thead><tbody>${rows}</tbody></table>`;
@@ -620,7 +627,7 @@ async function renderTindakSusul() {
         <option value="Selesai">Selesai</option>
       </select>
     </div>
-    <div class="action-bar"><button class="btn-outline" onclick="eksportTindakSusulExcel()">⬇️ Eksport Excel</button></div>
+    <div class="action-bar"><button class="btn-outline" onclick="dgnLoading(this,'Mengeksport...',()=>eksportTindakSusulExcel())">⬇️ Eksport Excel</button></div>
     <div id="tindaksusul-list">Memuatkan...</div>`;
   muatTindakSusul();
 }
@@ -693,6 +700,23 @@ function eksportTindakSusulExcel() {
 /* ================= PENJANA PDF (guna jsPDF + Chart.js) ================= */
 let LOGO_BASE64_CACHE = null;
 
+// Bungkus mana-mana tindakan async pada butang: papar spinner, tangkap ralat, pulihkan butang
+async function dgnLoading(btn, teksSibuk, fn) {
+  const asalHTML = btn.innerHTML;
+  const isOutline = btn.classList.contains('btn-outline');
+  btn.disabled = true;
+  btn.innerHTML = `<span class="btn-spinner"></span>${teksSibuk}`;
+  try {
+    await fn();
+  } catch (err) {
+    alert('Ralat semasa menjana: ' + (err && err.message ? err.message : err) + '\n\nSila cuba lagi. Jika berterusan, semak sambungan internet & tetapan API.');
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = asalHTML;
+  }
+}
+
 async function getLogoBase64() {
   if (LOGO_BASE64_CACHE) return LOGO_BASE64_CACHE;
   try {
@@ -711,15 +735,18 @@ function chartToImage(type, data, options, width = 560, height = 260) {
   return new Promise(resolve => {
     const canvas = document.createElement('canvas');
     canvas.width = width; canvas.height = height;
-    canvas.style.display = 'none';
+    // Render di luar skrin (bukan display:none) supaya Chart.js melukis dengan betul
+    canvas.style.position = 'absolute';
+    canvas.style.left = '-99999px';
+    canvas.style.top = '0';
     document.body.appendChild(canvas);
-    const chart = new Chart(canvas, { type, data, options: Object.assign({ animation: false, responsive: false }, options) });
+    const chart = new Chart(canvas, { type, data, options: Object.assign({ animation: false, responsive: false, devicePixelRatio: 2 }, options) });
     setTimeout(() => {
       const img = canvas.toDataURL('image/png');
       chart.destroy();
       canvas.remove();
       resolve(img);
-    }, 300);
+    }, 400);
   });
 }
 
@@ -739,10 +766,12 @@ async function tambahKepalaSurat(doc, tajuk, subtajuk) {
 
 // --- Laporan 1 Sesi Lawatan ---
 async function janaLaporanLawatan(pemantauanId) {
+  if (!window.jspdf || !window.jspdf.jsPDF) throw new Error('Perpustakaan PDF (jsPDF) belum dimuatkan. Semak sambungan internet.');
   const result = await callApi('getPemantauanDetail', { id: pemantauanId });
   const p = result.pemantauan;
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
+  if (typeof doc.autoTable !== 'function') throw new Error('Plugin jadual PDF (autotable) belum dimuatkan. Cuba hard refresh (Ctrl+Shift+R).');
   let y = await tambahKepalaSurat(doc, 'Laporan Pemantauan Sekolah', `${p.namaSekolah} (${p.kodSekolah}) · ${p.ppd}`);
 
   doc.setFontSize(10); doc.setTextColor(30);
@@ -777,9 +806,11 @@ async function janaLaporanLawatan(pemantauanId) {
 
 // --- Laporan 1 Sekolah (semua lawatan) — Admin ---
 async function janaLaporanSekolah(kodSekolah, namaSekolah) {
+  if (!window.jspdf || !window.jspdf.jsPDF) throw new Error('Perpustakaan PDF (jsPDF) belum dimuatkan. Semak sambungan internet.');
   const data = await callApi('getLaporanSekolah', { kodSekolah });
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
+  if (typeof doc.autoTable !== 'function') throw new Error('Plugin jadual PDF (autotable) belum dimuatkan. Cuba hard refresh (Ctrl+Shift+R).');
   let y = await tambahKepalaSurat(doc, 'Laporan Penuh Sekolah', `${namaSekolah} (${kodSekolah}) — ${data.lawatan.length} sesi pemantauan`);
 
   if (data.lawatan.length > 0) {
@@ -823,9 +854,11 @@ async function janaLaporanSekolah(kodSekolah, namaSekolah) {
 
 // --- Laporan Keseluruhan JPN — Admin ---
 async function janaLaporanKeseluruhan() {
+  if (!window.jspdf || !window.jspdf.jsPDF) throw new Error('Perpustakaan PDF (jsPDF) belum dimuatkan. Semak sambungan internet.');
   const data = await callApi('getLaporanKeseluruhan', {});
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
+  if (typeof doc.autoTable !== 'function') throw new Error('Plugin jadual PDF (autotable) belum dimuatkan. Cuba hard refresh (Ctrl+Shift+R).');
   let y = await tambahKepalaSurat(doc, 'Laporan Keseluruhan Pemantauan Sekolah', `Ringkasan JPN Kedah — ${data.jumlahSekolahKeseluruhan} sekolah berdaftar`);
 
   doc.setFontSize(10); doc.setTextColor(30);
