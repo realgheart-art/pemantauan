@@ -513,10 +513,17 @@ async function tambahItem(kategoriId) {
 
 /* ================= PETA SEKOLAH (Admin) ================= */
 let PETA_INSTANCE = null;
+let PETA_DATA = [];
+let PETA_MARKERS = [];
 
 async function renderPetaSekolah() {
   const c = document.getElementById('content');
   c.innerHTML = `<h2>Peta Sekolah</h2><p class="lede">Taburan sekolah mengikut status & kekerapan pemantauan.</p>
+    <div class="filters">
+      <select id="peta-ppd" onchange="lukisMarkerPeta()"><option value="">Semua PPD</option></select>
+      <input type="text" id="peta-cari" placeholder="Cari nama atau kod sekolah..." oninput="lukisMarkerPeta()" style="min-width:220px;">
+      <button class="btn-outline" onclick="resetTapisanPeta()">Set Semula</button>
+    </div>
     <div class="peta-legend">
       <span><span class="dot belum"></span> Belum dipantau</span>
       <span><span class="dot sikit"></span> 1–2 kali dipantau</span>
@@ -524,42 +531,75 @@ async function renderPetaSekolah() {
     </div>
     <div id="peta-info" style="font-size:12.5px;color:var(--muted);margin-bottom:10px;"></div>
     <div id="peta-container"></div>`;
-  const data = await callApi('getPetaStats', {});
+
+  PETA_DATA = await callApi('getPetaStats', {});
   if (PETA_INSTANCE) { PETA_INSTANCE.remove(); PETA_INSTANCE = null; }
   PETA_INSTANCE = L.map('peta-container').setView([6.12, 100.37], 10); // pusat Kedah
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(PETA_INSTANCE);
 
   const info = document.getElementById('peta-info');
-  if (!data || data.length === 0) {
+  if (!PETA_DATA || PETA_DATA.length === 0) {
     info.innerHTML = '⚠️ Tiada sekolah dengan koordinat (Lat/Lng) dalam pangkalan data. Sila pastikan lajur <b>Lat</b> dan <b>Lng</b> dalam sheet <b>Sekolah</b> diisi.';
     return;
   }
+
+  // Isi dropdown PPD (unik, disusun)
+  const senaraiPPD = [...new Set(PETA_DATA.map(s => s.ppd).filter(Boolean))].sort();
+  const ppdSelect = document.getElementById('peta-ppd');
+  senaraiPPD.forEach(ppd => {
+    const opt = document.createElement('option');
+    opt.value = ppd; opt.textContent = ppd;
+    ppdSelect.appendChild(opt);
+  });
+
+  lukisMarkerPeta();
+}
+
+function lukisMarkerPeta() {
+  if (!PETA_INSTANCE) return;
+  // Buang marker sedia ada
+  PETA_MARKERS.forEach(m => PETA_INSTANCE.removeLayer(m));
+  PETA_MARKERS = [];
+
+  const ppdPilih = document.getElementById('peta-ppd')?.value || '';
+  const carian = (document.getElementById('peta-cari')?.value || '').toLowerCase();
+
+  const data = PETA_DATA.filter(s => {
+    const padananPPD = !ppdPilih || s.ppd === ppdPilih;
+    const padananCari = !carian || (s.namaSekolah + s.kodSekolah).toLowerCase().includes(carian);
+    return padananPPD && padananCari;
+  });
 
   const koordinat = [];
   data.forEach(s => {
     const warna = s.bilangan === 0 ? '#9aa5b5' : (s.bilangan <= 2 ? '#c9862b' : '#3f8f5f');
     const tarikh = s.tarikhTerakhir ? new Date(s.tarikhTerakhir).toLocaleDateString('ms-MY') : 'Tiada';
-    // Pin bulat besar dengan nombor bilangan pemantauan di tengah (guna divIcon)
     const icon = L.divIcon({
       className: 'pin-sekolah',
       html: `<div style="width:30px;height:30px;border-radius:50%;background:${warna};border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;font-family:'Plus Jakarta Sans',sans-serif;">${s.bilangan}</div>`,
-      iconSize: [30, 30],
-      iconAnchor: [15, 15],
-      popupAnchor: [0, -16]
+      iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -16]
     });
     const marker = L.marker([s.lat, s.lng], { icon }).addTo(PETA_INSTANCE);
     marker.bindPopup(`<b>${s.namaSekolah}</b><br>${s.kodSekolah} · ${s.ppd}<br>Bilangan dipantau: <b>${s.bilangan}</b><br>Lawatan terakhir: ${tarikh}`);
+    PETA_MARKERS.push(marker);
     koordinat.push([s.lat, s.lng]);
   });
 
-  // Auto-zoom supaya semua pin masuk dalam paparan (elak pin di luar skrin)
+  const info = document.getElementById('peta-info');
   if (koordinat.length > 0) {
-    PETA_INSTANCE.fitBounds(koordinat, { padding: [40, 40], maxZoom: 13 });
+    PETA_INSTANCE.fitBounds(koordinat, { padding: [40, 40], maxZoom: 14 });
+    const belum = data.filter(s => s.bilangan === 0).length;
+    const dipantau = data.length - belum;
+    info.innerHTML = `Memaparkan <b>${data.length}</b> sekolah · <b>${dipantau}</b> telah dipantau · <b>${belum}</b> belum dipantau. Nombor dalam pin = bilangan kali dipantau.`;
+  } else {
+    info.innerHTML = 'Tiada sekolah sepadan dengan tapisan semasa.';
   }
+}
 
-  const belum = data.filter(s => s.bilangan === 0).length;
-  const dipantau = data.length - belum;
-  info.innerHTML = `Memaparkan <b>${data.length}</b> sekolah berkoordinat · <b>${dipantau}</b> telah dipantau · <b>${belum}</b> belum dipantau. Nombor dalam pin = bilangan kali dipantau.`;
+function resetTapisanPeta() {
+  const ppd = document.getElementById('peta-ppd'); if (ppd) ppd.value = '';
+  const cari = document.getElementById('peta-cari'); if (cari) cari.value = '';
+  lukisMarkerPeta();
 }
 
 /* ================= TINDAK SUSUL (Admin) ================= */
