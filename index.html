@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script>if(typeof Chart==='undefined'){document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"><\/script>');}</script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -733,6 +734,7 @@ async function getLogoBase64() {
 
 function chartToImage(type, data, options, width = 560, height = 260) {
   return new Promise(resolve => {
+    if (typeof Chart === 'undefined') { resolve(null); return; } // Chart.js tak dimuatkan — langkau carta
     const canvas = document.createElement('canvas');
     canvas.width = width; canvas.height = height;
     // Render di luar skrin (bukan display:none) supaya Chart.js melukis dengan betul
@@ -740,13 +742,18 @@ function chartToImage(type, data, options, width = 560, height = 260) {
     canvas.style.left = '-99999px';
     canvas.style.top = '0';
     document.body.appendChild(canvas);
-    const chart = new Chart(canvas, { type, data, options: Object.assign({ animation: false, responsive: false, devicePixelRatio: 2 }, options) });
-    setTimeout(() => {
-      const img = canvas.toDataURL('image/png');
-      chart.destroy();
+    try {
+      const chart = new Chart(canvas, { type, data, options: Object.assign({ animation: false, responsive: false, devicePixelRatio: 2 }, options) });
+      setTimeout(() => {
+        const img = canvas.toDataURL('image/png');
+        chart.destroy();
+        canvas.remove();
+        resolve(img);
+      }, 400);
+    } catch (e) {
       canvas.remove();
-      resolve(img);
-    }, 400);
+      resolve(null);
+    }
   });
 }
 
@@ -791,8 +798,7 @@ async function janaLaporanLawatan(pemantauanId) {
   const chartImg = await chartToImage('bar',
     { labels, datasets: [{ label: 'Purata Skor', data: nilai, backgroundColor: '#c8a24a' }] },
     { scales: { y: { min: 0, max: 5 } }, plugins: { legend: { display: false } } });
-  doc.addImage(chartImg, 'PNG', 14, y, 182, 80);
-  y += 88;
+  if (chartImg) { doc.addImage(chartImg, 'PNG', 14, y, 182, 80); y += 88; }
 
   doc.autoTable({
     startY: y,
@@ -823,8 +829,7 @@ async function janaLaporanSekolah(kodSekolah, namaSekolah) {
     const chartImg = await chartToImage('line',
       { labels, datasets: [{ label: 'Purata Skor Keseluruhan', data: purataKeseluruhan, borderColor: '#0f2038', backgroundColor: 'rgba(15,32,56,.1)', fill: true, tension: .3 }] },
       { scales: { y: { min: 0, max: 5 } }, plugins: { legend: { display: false } } });
-    doc.addImage(chartImg, 'PNG', 14, y, 182, 80);
-    y += 88;
+    if (chartImg) { doc.addImage(chartImg, 'PNG', 14, y, 182, 80); y += 88; }
 
     doc.autoTable({
       startY: y,
@@ -870,15 +875,16 @@ async function janaLaporanKeseluruhan() {
   const chartImg = await chartToImage('bar',
     { labels: data.ringkasan.purataKategori.map(k => k.kategori), datasets: [{ label: 'Purata Skor', data: data.ringkasan.purataKategori.map(k => k.purata), backgroundColor: '#c8a24a' }] },
     { scales: { y: { min: 0, max: 5 } }, plugins: { legend: { display: false } } });
-  doc.addImage(chartImg, 'PNG', 14, y, 182, 80);
-  y += 88;
+  if (chartImg) { doc.addImage(chartImg, 'PNG', 14, y, 182, 80); y += 88; }
 
   const trendImg = await chartToImage('line',
     { labels: data.ringkasan.trendBulanan.map(t => t.bulan), datasets: [{ label: 'Bilangan Lawatan', data: data.ringkasan.trendBulanan.map(t => t.bilangan), borderColor: '#0f2038', backgroundColor: 'rgba(15,32,56,.1)', fill: true, tension: .3 }] },
     { plugins: { legend: { display: false } } });
-  if (y > 190) { doc.addPage(); y = 20; }
-  doc.addImage(trendImg, 'PNG', 14, y, 182, 80);
-  y += 88;
+  if (trendImg) {
+    if (y > 190) { doc.addPage(); y = 20; }
+    doc.addImage(trendImg, 'PNG', 14, y, 182, 80);
+    y += 88;
+  }
 
   if (y > 220) { doc.addPage(); y = 20; }
   doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(15, 32, 56);
