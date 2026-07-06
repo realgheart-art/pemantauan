@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pemantauan Sekolah &mdash; JPN Kedah</title>
+<link rel="icon" type="image/png" href="logo.png">
+<link rel="apple-touch-icon" href="logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root{
+    --navy-950:#0a1628; --navy-900:#0f2038; --navy-800:#16304f; --navy-700:#1e4066;
+    --brass:#c8a24a; --brass-light:#e4c775; --brass-dark:#8f7328;
+    --cream:#f7f4ec; --ink:#1b2430; --muted:#6b7688; --line:#e4e0d3;
+    --ok:#3f8f5f; --warn:#c9862b; --bad:#b5473a;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Plus Jakarta Sans',sans-serif;background:var(--cream);color:var(--ink);}
+  h1,h2,h3,.brand{font-family:'Fraunces',serif;}
+  button{font-family:inherit;cursor:pointer;}
+  .app{min-height:100vh;display:flex;flex-direction:column;}
+
+  /* ===== HEADER ===== */
+  header.top{background:linear-gradient(135deg,var(--navy-950),var(--navy-800));color:#fff;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:0 2px 12px rgba(0,0,0,.25);}
+  header.top .brand{font-size:20px;font-weight:600;letter-spacing:.3px;display:flex;align-items:center;gap:10px;}
+  header.top .brand .crest{width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0;}
+  header.top .sub{font-size:11px;color:var(--brass-light);font-weight:500;letter-spacing:.5px;text-transform:uppercase;}
+  .userchip{display:flex;align-items:center;gap:10px;font-size:13px;}
+  .userchip button{background:transparent;border:1px solid rgba(255,255,255,.3);color:#fff;padding:6px 12px;border-radius:20px;font-size:12px;}
+  .userchip button:hover{background:rgba(255,255,255,.1);}
+
+  /* ===== LOGIN ===== */
+  .login-wrap{flex:1;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 20% 20%,var(--navy-800),var(--navy-950) 60%);padding:20px;}
+  .login-card{background:#fff;border-radius:20px;padding:40px 36px;max-width:380px;width:100%;box-shadow:0 30px 60px rgba(0,0,0,.35);border-top:4px solid var(--brass);}
+  .login-card .crest{width:88px;height:88px;border-radius:50%;object-fit:cover;display:block;margin:0 auto 14px;box-shadow:0 4px 16px rgba(15,32,56,.25);}
+  .login-card h1{text-align:center;font-size:22px;margin:0 0 4px;color:var(--navy-900);}
+  .login-card p.tag{text-align:center;color:var(--muted);font-size:13px;margin:0 0 26px;}
+  label{display:block;font-size:12px;font-weight:600;color:var(--navy-800);margin:14px 0 6px;text-transform:uppercase;letter-spacing:.4px;}
+  input[type=email],input[type=password],input[type=text],select,textarea{
+    width:100%;padding:11px 14px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;font-family:inherit;background:#fdfcf9;
+  }
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--brass);box-shadow:0 0 0 3px rgba(200,162,74,.18);}
+  .btn-primary{width:100%;margin-top:22px;background:linear-gradient(135deg,var(--navy-800),var(--navy-950));color:#fff;border:none;padding:13px;border-radius:10px;font-weight:600;font-size:14px;letter-spacing:.3px;}
+  .btn-primary:hover{background:var(--navy-700);}
+  .error-msg{color:var(--bad);font-size:13px;margin-top:10px;text-align:center;}
+
+  /* ===== LAYOUT ===== */
+  .main{flex:1;display:flex;}
+  nav.side{width:220px;background:var(--navy-900);color:#fff;padding:22px 0;flex-shrink:0;}
+  nav.side .navitem{padding:12px 24px;font-size:14px;font-weight:500;color:#c7d0de;cursor:pointer;border-left:3px solid transparent;display:flex;align-items:center;gap:10px;}
+  nav.side .navitem:hover{background:rgba(255,255,255,.05);}
+  nav.side .navitem.active{color:#fff;border-left-color:var(--brass);background:rgba(200,162,74,.1);}
+  .content{flex:1;padding:28px 32px;overflow-y:auto;}
+  .content h2{margin:0 0 4px;font-size:24px;color:var(--navy-900);}
+  .content .lede{color:var(--muted);font-size:13.5px;margin:0 0 22px;}
+
+  /* ===== CARDS / GRID ===== */
+  .card{background:#fff;border-radius:var(--radius);padding:20px;box-shadow:0 1px 3px rgba(20,30,50,.08);border:1px solid var(--line);}
+  .grid-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:22px;}
+  .stat{background:#fff;border-radius:var(--radius);padding:18px;border:1px solid var(--line);border-left:4px solid var(--brass);}
+  .stat .num{font-family:'Fraunces',serif;font-size:30px;color:var(--navy-900);font-weight:700;}
+  .stat .lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-top:2px;}
+
+  /* ===== PEGAWAI: PILIH SEKOLAH ===== */
+  .search-box{display:flex;gap:10px;margin-bottom:16px;}
+  .search-box input{flex:1;}
+  .sekolah-list{display:grid;gap:10px;max-height:520px;overflow-y:auto;}
+  .sekolah-item{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;}
+  .sekolah-item:hover{border-color:var(--brass);}
+  .sekolah-item .nama{font-weight:600;color:var(--navy-900);font-size:14px;}
+  .sekolah-item .meta{font-size:12px;color:var(--muted);}
+  .sekolah-item button{background:var(--navy-900);color:#fff;border:none;padding:8px 16px;border-radius:20px;font-size:12.5px;font-weight:600;}
+  .sekolah-item button:hover{background:var(--brass-dark);}
+
+  /* ===== PEMANTAUAN FORM ===== */
+  .kategori-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;}
+  .kategori-tabs button{padding:8px 16px;border-radius:20px;border:1.5px solid var(--line);background:#fff;font-size:13px;font-weight:600;color:var(--navy-800);}
+  .kategori-tabs button.active{background:var(--navy-900);color:#fff;border-color:var(--navy-900);}
+  .kategori-tabs button .badge{background:var(--brass);color:var(--navy-950);border-radius:10px;padding:1px 6px;font-size:10px;margin-left:6px;}
+  .item-row{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:12px;}
+  .item-row .perkara{font-weight:600;font-size:14px;color:var(--navy-900);margin-bottom:10px;}
+  .skala-btns{display:flex;gap:6px;margin-bottom:10px;}
+  .skala-btns button{width:42px;height:38px;border-radius:8px;border:1.5px solid var(--line);background:#fdfcf9;font-weight:700;font-size:14px;color:var(--muted);}
+  .skala-btns button.sel-1{background:var(--bad);color:#fff;border-color:var(--bad);}
+  .skala-btns button.sel-2{background:#c9862b;color:#fff;border-color:#c9862b;}
+  .skala-btns button.sel-3{background:#d4b83a;color:#1b2430;border-color:#d4b83a;}
+  .skala-btns button.sel-4{background:#7fa869;color:#fff;border-color:#7fa869;}
+  .skala-btns button.sel-5{background:var(--ok);color:#fff;border-color:var(--ok);}
+  .item-row textarea{min-height:56px;resize:vertical;}
+  .item-row .photo-row{margin-top:10px;display:flex;align-items:center;gap:12px;}
+  .item-row .photo-row img{height:52px;border-radius:8px;border:1px solid var(--line);}
+  .photo-btn{background:var(--cream);border:1.5px dashed var(--line);padding:8px 14px;border-radius:8px;font-size:12.5px;color:var(--navy-800);font-weight:600;}
+  .submit-bar{position:sticky;bottom:0;background:#fff;padding:16px 0;border-top:1px solid var(--line);display:flex;justify-content:flex-end;margin-top:20px;}
+  .submit-bar button{background:linear-gradient(135deg,var(--navy-800),var(--navy-950));color:#fff;border:none;padding:13px 28px;border-radius:10px;font-weight:700;font-size:14px;}
+
+  /* ===== ADMIN TABLE ===== */
+  table{width:100%;border-collapse:collapse;background:#fff;border-radius:var(--radius);overflow:hidden;}
+  th{background:var(--navy-900);color:#fff;text-align:left;padding:11px 14px;font-size:12px;text-transform:uppercase;letter-spacing:.3px;}
+  td{padding:11px 14px;font-size:13.5px;border-bottom:1px solid var(--line);}
+  tr:last-child td{border-bottom:none;}
+  .officer-tag{display:inline-flex;align-items:center;gap:6px;background:var(--cream);border:1px solid var(--line);padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;color:var(--navy-800);}
+  .filters{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
+  .filters select,.filters input{width:auto;min-width:140px;}
+  .tag-kategori{background:var(--navy-900);color:#fff;font-size:11px;padding:6px 12px;border-radius:20px;font-weight:600;border:none;}
+  .tag-kategori.inactive{background:#ccc;color:#666;}
+  .kategori-manage-row{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;background:#fff;}
+  .add-form{display:flex;gap:8px;margin-top:14px;}
+  .add-form input{flex:1;}
+  .add-form button{background:var(--navy-900);color:#fff;border:none;padding:0 18px;border-radius:8px;font-weight:600;font-size:13px;}
+  .hidden{display:none !important;}
+  .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:8px;}
+  @media(max-width:900px){.charts-grid{grid-template-columns:1fr;} nav.side{width:64px;} nav.side .navitem span.txt{display:none;} .content{padding:18px;}}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- ===== LOGIN VIEW ===== -->
+  <div class="login-wrap" id="view-login">
+    <div class="login-card">
+      <img src="logo.png" alt="Logo JPN Kedah" class="crest">
+      <h1>Pemantauan Sekolah</h1>
+      <p class="tag">Hadir Membimbing, Bersama Membina Kejayaan</p>
+      <label>E-mel</label>
+      <input type="email" id="login-emel" placeholder="nama@moe-dl.edu.my">
+      <label>PIN</label>
+      <input type="password" id="login-pin" placeholder="••••">
+      <button class="btn-primary" onclick="doLogin()">Log Masuk</button>
+      <div class="error-msg hidden" id="login-error"></div>
+    </div>
+  </div>
+
+  <!-- ===== APP SHELL (selepas login) ===== -->
+  <div id="view-shell" class="hidden" style="display:flex;flex-direction:column;min-height:100vh;">
+    <header class="top">
+      <div class="brand"><img src="logo.png" alt="Logo JPN Kedah" class="crest"> Pemantauan Sekolah <span class="sub" id="role-badge" style="margin-left:8px;"></span></div>
+      <div class="userchip"><span id="user-nama"></span><button onclick="logout()">Log Keluar</button></div>
+    </header>
+    <div class="main">
+      <nav class="side" id="sidebar"></nav>
+      <div class="content" id="content"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= KONFIGURASI ================= */
+// GANTI dengan URL Web App selepas deploy Apps Script (Deploy > New deployment > Web app)
+const API_URL = 'https://script.google.com/macros/s/GANTI_DENGAN_ID_DEPLOYMENT/exec';
+
+let CURRENT_USER = null;
+let KATEGORI_DATA = [];
+let SEKOLAH_DATA = [];
+let SELECTED_SEKOLAH = null;
+let DAPATAN_STATE = {}; // { itemId: {skala, catatan, gambarBase64} }
+let ACTIVE_KATEGORI_ID = null;
+
+/* ================= API HELPER ================= */
+async function callApi(action, payload = {}) {
+  const res = await fetch(API_URL + '?action=' + action, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+  return res.json();
+}
+
+/* ================= LOGIN / LOGOUT ================= */
+async function doLogin() {
+  const emel = document.getElementById('login-emel').value.trim();
+  const pin = document.getElementById('login-pin').value.trim();
+  const errEl = document.getElementById('login-error');
+  errEl.classList.add('hidden');
+  if (!emel || !pin) { errEl.textContent = 'Sila isi e-mel dan PIN.'; errEl.classList.remove('hidden'); return; }
+  const result = await callApi('login', { emel, pin });
+  if (!result.success) { errEl.textContent = result.message || 'Log masuk gagal.'; errEl.classList.remove('hidden'); return; }
+  CURRENT_USER = result.user;
+  sessionStorage.setItem('pemantauan_user', JSON.stringify(CURRENT_USER));
+  initShell();
+}
+
+function logout() {
+  CURRENT_USER = null;
+  sessionStorage.removeItem('pemantauan_user');
+  document.getElementById('view-shell').classList.add('hidden');
+  document.getElementById('view-login').classList.remove('hidden');
+}
+
+window.addEventListener('load', () => {
+  const saved = sessionStorage.getItem('pemantauan_user');
+  if (saved) { CURRENT_USER = JSON.parse(saved); initShell(); }
+});
+
+/* ================= APP SHELL ================= */
+function initShell() {
+  document.getElementById('view-login').classList.add('hidden');
+  document.getElementById('view-shell').classList.remove('hidden');
+  document.getElementById('user-nama').textContent = CURRENT_USER.nama;
+  document.getElementById('role-badge').textContent = CURRENT_USER.peranan === 'Admin' ? '· ADMIN' : '· PEGAWAI PEMANTAU';
+
+  const sidebar = document.getElementById('sidebar');
+  if (CURRENT_USER.peranan === 'Admin') {
+    sidebar.innerHTML = `
+      <div class="navitem active" data-view="dashboard" onclick="nav('dashboard')">📊 <span class="txt">Dashboard</span></div>
+      <div class="navitem" data-view="senarai" onclick="nav('senarai')">📋 <span class="txt">Senarai Pemantauan</span></div>
+      <div class="navitem" data-view="urus" onclick="nav('urus')">⚙️ <span class="txt">Urus Kategori & Item</span></div>
+    `;
+    nav('dashboard');
+  } else {
+    sidebar.innerHTML = `
+      <div class="navitem active" data-view="pilihsekolah" onclick="nav('pilihsekolah')">🏫 <span class="txt">Buat Pemantauan</span></div>
+      <div class="navitem" data-view="senarai" onclick="nav('senarai')">📋 <span class="txt">Sejarah Lawatan Saya</span></div>
+    `;
+    nav('pilihsekolah');
+  }
+}
+
+function nav(view) {
+  document.querySelectorAll('.navitem').forEach(el => el.classList.toggle('active', el.dataset.view === view));
+  const c = document.getElementById('content');
+  if (view === 'dashboard') renderDashboard();
+  else if (view === 'senarai') renderSenarai();
+  else if (view === 'urus') renderUrusKategori();
+  else if (view === 'pilihsekolah') renderPilihSekolah();
+}
+
+/* ================= PEGAWAI: PILIH SEKOLAH ================= */
+async function renderPilihSekolah() {
+  const c = document.getElementById('content');
+  c.innerHTML = `<h2>Pilih Sekolah</h2><p class="lede">Cari & pilih sekolah untuk memulakan sesi pemantauan.</p>
+    <div class="search-box"><input type="text" id="cari-sekolah" placeholder="Cari nama atau kod sekolah..." oninput="filterSekolah()"></div>
+    <div class="sekolah-list" id="sekolah-list"><p style="color:var(--muted);">Memuatkan senarai sekolah...</p></div>`;
+  if (SEKOLAH_DATA.length === 0) SEKOLAH_DATA = await callApi('getSekolah');
+  filterSekolah();
+}
+
+function filterSekolah() {
+  const q = (document.getElementById('cari-sekolah')?.value || '').toLowerCase();
+  const list = SEKOLAH_DATA.filter(s => (s.NamaSekolah + s.KodSekolah).toLowerCase().includes(q)).slice(0, 60);
+  document.getElementById('sekolah-list').innerHTML = list.map(s => `
+    <div class="sekolah-item">
+      <div><div class="nama">${s.NamaSekolah}</div><div class="meta">${s.KodSekolah} · ${s.PPD} · ${s.Gred}</div></div>
+      <button onclick='mulaPemantauan(${JSON.stringify(s)})'>Mula Pemantauan</button>
+    </div>`).join('') || '<p style="color:var(--muted);">Tiada sekolah dijumpai.</p>';
+}
+
+/* ================= PEGAWAI: BORANG PEMANTAUAN ================= */
+async function mulaPemantauan(sekolah) {
+  SELECTED_SEKOLAH = sekolah;
+  DAPATAN_STATE = {};
+  if (KATEGORI_DATA.length === 0) KATEGORI_DATA = await callApi('getKategoriPenuh');
+  ACTIVE_KATEGORI_ID = KATEGORI_DATA[0]?.id;
+  renderBorangPemantauan();
+}
+
+function renderBorangPemantauan() {
+  const c = document.getElementById('content');
+  c.innerHTML = `
+    <h2>${SELECTED_SEKOLAH.NamaSekolah}</h2>
+    <p class="lede">${SELECTED_SEKOLAH.KodSekolah} · ${SELECTED_SEKOLAH.PPD} — isi dapatan mengikut kategori di bawah.</p>
+    <div class="kategori-tabs" id="kategori-tabs"></div>
+    <div id="item-list"></div>
+    <div class="submit-bar"><button onclick="hantarPemantauan()">Hantar Pemantauan</button></div>
+  `;
+  renderKategoriTabs();
+  renderItemList();
+}
+
+function renderKategoriTabs() {
+  const el = document.getElementById('kategori-tabs');
+  el.innerHTML = KATEGORI_DATA.map(k => {
+    const diisi = k.items.filter(i => DAPATAN_STATE[i.id]?.skala).length;
+    return `<button class="${k.id === ACTIVE_KATEGORI_ID ? 'active' : ''}" onclick="gantiKategori(${k.id})">
+      ${k.nama} <span class="badge">${diisi}/${k.items.length}</span></button>`;
+  }).join('');
+}
+
+function gantiKategori(id) { ACTIVE_KATEGORI_ID = id; renderKategoriTabs(); renderItemList(); }
+
+function renderItemList() {
+  const kat = KATEGORI_DATA.find(k => k.id === ACTIVE_KATEGORI_ID);
+  const el = document.getElementById('item-list');
+  el.innerHTML = kat.items.map(item => {
+    const state = DAPATAN_STATE[item.id] || {};
+    return `<div class="item-row">
+      <div class="perkara">${item.perkara}</div>
+      <div class="skala-btns">
+        ${[1,2,3,4,5].map(n => `<button class="${state.skala === n ? 'sel-'+n : ''}" onclick="setSkala(${item.id},${n})">${n}</button>`).join('')}
+      </div>
+      <textarea placeholder="Catatan (wajib jika skor rendah)..." oninput="setCatatan(${item.id}, this.value)">${state.catatan || ''}</textarea>
+      <div class="photo-row">
+        <label class="photo-btn" style="margin:0;">📷 Muat Naik Gambar
+          <input type="file" accept="image/*" capture="environment" style="display:none" onchange="setGambar(${item.id}, this)">
+        </label>
+        ${state.gambarBase64 ? `<img src="${state.gambarBase64}">` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function setSkala(itemId, n) {
+  DAPATAN_STATE[itemId] = { ...(DAPATAN_STATE[itemId] || {}), skala: n };
+  renderKategoriTabs(); renderItemList();
+}
+function setCatatan(itemId, val) { DAPATAN_STATE[itemId] = { ...(DAPATAN_STATE[itemId] || {}), catatan: val }; }
+function setGambar(itemId, input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => { DAPATAN_STATE[itemId] = { ...(DAPATAN_STATE[itemId] || {}), gambarBase64: e.target.result }; renderItemList(); };
+  reader.readAsDataURL(file);
+}
+
+async function hantarPemantauan() {
+  const dapatan = Object.keys(DAPATAN_STATE).filter(id => DAPATAN_STATE[id].skala).map(id => ({
+    itemId: id, skala: DAPATAN_STATE[id].skala, catatan: DAPATAN_STATE[id].catatan || '', gambarBase64: DAPATAN_STATE[id].gambarBase64 || ''
+  }));
+  if (dapatan.length === 0) { alert('Sila isi sekurang-kurangnya satu perkara semakan sebelum hantar.'); return; }
+  const result = await callApi('submitPemantauan', {
+    kodSekolah: SELECTED_SEKOLAH.KodSekolah, pegawaiId: CURRENT_USER.id, namaPegawai: CURRENT_USER.nama, dapatan
+  });
+  if (result.success) { alert('Pemantauan berjaya dihantar.'); nav('pilihsekolah'); }
+  else alert('Ralat: ' + (result.error || result.message));
+}
+
+/* ================= SENARAI PEMANTAUAN (Admin & Pegawai) ================= */
+async function renderSenarai() {
+  const c = document.getElementById('content');
+  c.innerHTML = `<h2>Senarai Pemantauan</h2><p class="lede">Rekod lawatan pemantauan yang telah dihantar.</p>
+    <div class="filters">
+      <input type="date" id="f-tarikh-dari"><input type="date" id="f-tarikh-hingga">
+      <button onclick="muatSenarai()" style="background:var(--navy-900);color:#fff;border:none;border-radius:8px;padding:0 16px;">Tapis</button>
+    </div>
+    <div id="senarai-table">Memuatkan...</div>`;
+  muatSenarai();
+}
+
+async function muatSenarai() {
+  const payload = { tarikhDari: document.getElementById('f-tarikh-dari')?.value, tarikhHingga: document.getElementById('f-tarikh-hingga')?.value };
+  if (CURRENT_USER.peranan !== 'Admin') payload.pegawaiId = CURRENT_USER.id;
+  const list = await callApi('getPemantauanList', payload);
+  document.getElementById('senarai-table').innerHTML = `
+    <table><thead><tr><th>Sekolah</th><th>Pegawai Pemantau</th><th>Tarikh & Masa</th><th>Status</th><th></th></tr></thead>
+    <tbody>${list.map(p => `<tr>
+      <td>${p.namaSekolah}<br><span style="color:var(--muted);font-size:11.5px;">${p.kodSekolah}</span></td>
+      <td><span class="officer-tag">👤 ${p.namaPegawai}</span></td>
+      <td>${new Date(p.tarikhMasa).toLocaleString('ms-MY')}</td>
+      <td>${p.status}</td>
+      <td><button onclick="lihatDetail(${p.id})" style="background:none;border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:12px;">Lihat</button></td>
+    </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);">Tiada rekod.</td></tr>'}</tbody></table>`;
+}
+
+async function lihatDetail(id) {
+  const result = await callApi('getPemantauanDetail', { id });
+  const p = result.pemantauan;
+  const rows = result.dapatan.map(d => `<tr><td>${d.kategori}</td><td>${d.perkara}</td><td>${d.skala}/5</td><td>${d.catatan || '-'}</td><td>${d.linkGambar ? `<a href="${d.linkGambar}" target="_blank">Lihat</a>` : '-'}</td></tr>`).join('');
+  document.getElementById('content').innerHTML = `
+    <button onclick="nav('senarai')" style="background:none;border:none;color:var(--navy-800);font-weight:600;margin-bottom:14px;">← Kembali ke Senarai</button>
+    <h2>${p.namaSekolah}</h2>
+    <p class="lede">${p.kodSekolah} · ${p.ppd} · Dipantau oleh <b>${p.namaPegawai}</b> pada ${new Date(p.tarikhMasa).toLocaleString('ms-MY')}</p>
+    <table><thead><tr><th>Kategori</th><th>Perkara</th><th>Skor</th><th>Catatan</th><th>Gambar</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+/* ================= ADMIN: DASHBOARD ================= */
+async function renderDashboard() {
+  const c = document.getElementById('content');
+  c.innerHTML = `<h2>Dashboard Pemantauan</h2><p class="lede">Ringkasan keseluruhan pemantauan sekolah JPN Kedah.</p>
+    <div class="grid-stats" id="stat-cards"></div>
+    <div class="charts-grid">
+      <div class="card"><h3 style="margin-top:0;font-size:15px;">Purata Skor Ikut Kategori</h3><canvas id="chart-kategori"></canvas></div>
+      <div class="card"><h3 style="margin-top:0;font-size:15px;">Trend Bilangan Pemantauan (Bulanan)</h3><canvas id="chart-trend"></canvas></div>
+    </div>`;
+  const stats = await callApi('getDashboardStats', {});
+  document.getElementById('stat-cards').innerHTML = `
+    <div class="stat"><div class="num">${stats.jumlahPemantauan}</div><div class="lbl">Jumlah Pemantauan</div></div>
+    <div class="stat"><div class="num">${stats.jumlahSekolahDipantau}</div><div class="lbl">Sekolah Telah Dipantau</div></div>`;
+  new Chart(document.getElementById('chart-kategori'), {
+    type: 'bar',
+    data: { labels: stats.purataKategori.map(k => k.kategori), datasets: [{ label: 'Purata Skor', data: stats.purataKategori.map(k => k.purata), backgroundColor: '#c8a24a' }] },
+    options: { scales: { y: { min: 0, max: 5 } }, plugins: { legend: { display: false } } }
+  });
+  new Chart(document.getElementById('chart-trend'), {
+    type: 'line',
+    data: { labels: stats.trendBulanan.map(t => t.bulan), datasets: [{ label: 'Bilangan Lawatan', data: stats.trendBulanan.map(t => t.bilangan), borderColor: '#0f2038', backgroundColor: 'rgba(15,32,56,.1)', fill: true, tension: .3 }] },
+    options: { plugins: { legend: { display: false } } }
+  });
+}
+
+/* ================= ADMIN: URUS KATEGORI & ITEM ================= */
+async function renderUrusKategori() {
+  const c = document.getElementById('content');
+  c.innerHTML = `<h2>Urus Kategori & Item Semakan</h2><p class="lede">Tambah, edit atau nyahaktifkan kategori dan perkara semakan.</p>
+    <div id="kategori-manage"></div>
+    <div class="add-form"><input type="text" id="new-kategori-nama" placeholder="Nama kategori baharu..."><button onclick="tambahKategori()">+ Tambah Kategori</button></div>`;
+  KATEGORI_DATA = await callApi('getKategoriPenuh');
+  renderKategoriManage();
+}
+
+function renderKategoriManage() {
+  document.getElementById('kategori-manage').innerHTML = KATEGORI_DATA.map(k => `
+    <div class="card" style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <h3 style="margin:0;font-size:16px;">${k.nama}</h3>
+        <span class="tag-kategori">${k.items.length} perkara</span>
+      </div>
+      ${k.items.map(i => `<div class="kategori-manage-row"><span>${i.perkara}</span></div>`).join('')}
+      <div class="add-form"><input type="text" id="new-item-${k.id}" placeholder="Tambah perkara semakan baharu..."><button onclick="tambahItem(${k.id})">+ Tambah</button></div>
+    </div>`).join('');
+}
+
+async function tambahKategori() {
+  const nama = document.getElementById('new-kategori-nama').value.trim();
+  if (!nama) return;
+  await callApi('addKategori', { nama, susunan: KATEGORI_DATA.length + 1 });
+  document.getElementById('new-kategori-nama').value = '';
+  KATEGORI_DATA = await callApi('getKategoriPenuh');
+  renderKategoriManage();
+}
+
+async function tambahItem(kategoriId) {
+  const input = document.getElementById(`new-item-${kategoriId}`);
+  const perkara = input.value.trim();
+  if (!perkara) return;
+  await callApi('addItem', { kategoriId, perkara });
+  KATEGORI_DATA = await callApi('getKategoriPenuh');
+  renderKategoriManage();
+}
+</script>
+</body>
+</html>
