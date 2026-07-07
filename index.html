@@ -192,7 +192,7 @@
 <script>
 /* ================= KONFIGURASI ================= */
 // GANTI dengan URL Web App selepas deploy Apps Script (Deploy > New deployment > Web app)
-const API_URL = 'https://script.google.com/macros/s/AKfycbwiP3Q9fpSe4u-MbbE7oGvPabrZ5KvWbRjjJ3P3Qou-7FWyu4zLamAyPhCGHgHPAk8s/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbwpOhctNLf6Ov32P93gY3k49RqIxghkUljlY0W0BIZJbmQg2jKKY9aQgrrgLge-xjG7/exec';
 
 let CURRENT_USER = null;
 let KATEGORI_DATA = [];
@@ -384,7 +384,11 @@ async function renderSenarai() {
   const c = document.getElementById('content');
   const adminBtns = CURRENT_USER.peranan === 'Admin'
     ? `<button class="btn-gold" onclick="dgnLoading(this,'Menjana PDF...',()=>janaLaporanKeseluruhan())">📄 Analisis Kategori — Keseluruhan JPN</button>
-       <button class="btn-outline" onclick="dgnLoading(this,'Menjana PDF...',()=>janaLaporanPegawai())">👤 Analitik Mengikut Pegawai</button>`
+       <button class="btn-outline" onclick="dgnLoading(this,'Menjana PDF...',()=>janaLaporanPegawai())">👤 Analitik Mengikut Pegawai</button>
+       <span style="display:inline-flex;gap:6px;align-items:center;">
+         <select id="pilih-ppd-laporan" style="min-width:170px;"><option value="">— Pilih PPD —</option></select>
+         <button class="btn-outline" onclick="janaLaporanPPDDipilih(this)">🏢 Analisis Kategori — PPD</button>
+       </span>`
     : '';
   c.innerHTML = `<h2>Senarai Pemantauan</h2><p class="lede">Rekod lawatan pemantauan yang telah dihantar.</p>
     <div class="filters">
@@ -397,6 +401,24 @@ async function renderSenarai() {
     </div>
     <div id="senarai-table">Memuatkan...</div>`;
   muatSenarai();
+  if (CURRENT_USER.peranan === 'Admin') isiDropdownPPD();
+}
+
+async function isiDropdownPPD() {
+  const sel = document.getElementById('pilih-ppd-laporan');
+  if (!sel) return;
+  const senarai = await callApi('getSenaraiPPD', {});
+  (senarai || []).forEach(ppd => {
+    const opt = document.createElement('option');
+    opt.value = ppd; opt.textContent = ppd;
+    sel.appendChild(opt);
+  });
+}
+
+function janaLaporanPPDDipilih(btn) {
+  const ppd = document.getElementById('pilih-ppd-laporan')?.value;
+  if (!ppd) { alert('Sila pilih PPD dahulu dari senarai.'); return; }
+  dgnLoading(btn, 'Menjana PDF...', () => janaLaporanPPD(ppd));
 }
 
 let SENARAI_TERKINI = [];
@@ -916,6 +938,24 @@ async function janaLaporanPegawai(pegawaiId) {
   });
 
   doc.save(`Laporan_Pegawai_${Utilities_formatTarikhFail()}.pdf`);
+}
+// --- Laporan Analitik Mengikut Pegawai — Admin ---
+async function janaLaporanPPD(ppd) {
+  if (!window.jspdf || !window.jspdf.jsPDF) throw new Error('Perpustakaan PDF (jsPDF) belum dimuatkan. Semak sambungan internet.');
+  const data = await callApi('getAnalitikKategori', { ppd });
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  semakLib(doc);
+  let y = await tambahKepalaSurat(doc, 'Laporan Analisis Kategori — Mengikut PPD', `${ppd}`);
+
+  doc.setFontSize(10); doc.setTextColor(30);
+  doc.text(`Jumlah Lawatan: ${data.jumlahLawatan}`, 14, y);
+  doc.text(`Sekolah Dipantau: ${data.jumlahSekolah}`, 14, y + 6);
+  y += 16;
+
+  y = seksyenAnalitikKategori(doc, y, data.analitik);
+
+  doc.save(`Laporan_Kategori_PPD_${ppd.replace(/[^a-zA-Z0-9]/g,'_')}_${Utilities_formatTarikhFail()}.pdf`);
 }
 </script>
 </body>
