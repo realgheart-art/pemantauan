@@ -192,7 +192,7 @@
 <script>
 /* ================= KONFIGURASI ================= */
 // GANTI dengan URL Web App selepas deploy Apps Script (Deploy > New deployment > Web app)
-const API_URL = 'https://script.google.com/macros/s/AKfycbzZchpNVCj4Mo1_avRwlFljSDothTEDdWpXtFYLPYTwL79cg2IwDHbk7dTtPe3oGsnL/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbwiP3Q9fpSe4u-MbbE7oGvPabrZ5KvWbRjjJ3P3Qou-7FWyu4zLamAyPhCGHgHPAk8s/exec';
 
 let CURRENT_USER = null;
 let KATEGORI_DATA = [];
@@ -383,7 +383,8 @@ async function hantarPemantauan() {
 async function renderSenarai() {
   const c = document.getElementById('content');
   const adminBtns = CURRENT_USER.peranan === 'Admin'
-    ? `<button class="btn-gold" onclick="dgnLoading(this,'Menjana PDF...',()=>janaLaporanKeseluruhan())">📄 Laporan Keseluruhan JPN (PDF)</button>`
+    ? `<button class="btn-gold" onclick="dgnLoading(this,'Menjana PDF...',()=>janaLaporanKeseluruhan())">📄 Analisis Kategori — Keseluruhan JPN</button>
+       <button class="btn-outline" onclick="dgnLoading(this,'Menjana PDF...',()=>janaLaporanPegawai())">👤 Analitik Mengikut Pegawai</button>`
     : '';
   c.innerHTML = `<h2>Senarai Pemantauan</h2><p class="lede">Rekod lawatan pemantauan yang telah dihantar.</p>
     <div class="filters">
@@ -441,7 +442,7 @@ async function lihatDetail(id) {
   const p = result.pemantauan;
   const rows = result.dapatan.map(d => `<tr><td>${d.kategori}</td><td>${d.perkara}</td><td>${d.skala}/5</td><td>${d.catatan || '-'}</td><td>${d.linkGambar ? `<a href="${d.linkGambar}" target="_blank">Lihat</a>` : '-'}</td></tr>`).join('');
   const laporanSekolahBtn = CURRENT_USER.peranan === 'Admin'
-    ? `<button class="btn-outline" onclick="dgnLoading(this,'Menjana PDF...',()=>janaLaporanSekolah('${p.kodSekolah}','${p.namaSekolah.replace(/'/g,"\\'")}'))">📄 Laporan Penuh Sekolah Ini (PDF)</button>`
+    ? `<button class="btn-outline" onclick="dgnLoading(this,'Menjana PDF...',()=>janaLaporanSekolah('${p.kodSekolah}','${p.namaSekolah.replace(/'/g,"\\'")}'))">📊 Analisis Kategori — Sekolah Ini</button>`
     : '';
   document.getElementById('content').innerHTML = `
     <button onclick="nav('senarai')" style="background:none;border:none;color:var(--navy-800);font-weight:600;margin-bottom:14px;">← Kembali ke Senarai</button>
@@ -732,29 +733,30 @@ async function getLogoBase64() {
   return LOGO_BASE64_CACHE;
 }
 
-function chartToImage(type, data, options, width = 560, height = 260) {
-  return new Promise(resolve => {
-    if (typeof Chart === 'undefined') { resolve(null); return; } // Chart.js tak dimuatkan — langkau carta
-    const canvas = document.createElement('canvas');
-    canvas.width = width; canvas.height = height;
-    // Render di luar skrin (bukan display:none) supaya Chart.js melukis dengan betul
-    canvas.style.position = 'absolute';
-    canvas.style.left = '-99999px';
-    canvas.style.top = '0';
-    document.body.appendChild(canvas);
-    try {
-      const chart = new Chart(canvas, { type, data, options: Object.assign({ animation: false, responsive: false, devicePixelRatio: 2 }, options) });
-      setTimeout(() => {
-        const img = canvas.toDataURL('image/png');
-        chart.destroy();
-        canvas.remove();
-        resolve(img);
-      }, 400);
-    } catch (e) {
-      canvas.remove();
-      resolve(null);
-    }
+// Lukis carta bar mendatar terus dalam jsPDF (tiada Chart.js — jauh lebih kukuh)
+// analitik: [{kategori, purata, bilItem}] ; skala max 5
+function lukisBarKategori(doc, x, y, lebarPenuh, analitik, maxSkala = 5) {
+  const barTinggi = 6, jarak = 4, labelLebar = 52;
+  const barX = x + labelLebar;
+  const barMax = lebarPenuh - labelLebar - 16; // ruang untuk nilai di hujung
+  analitik.forEach((a, i) => {
+    const yy = y + i * (barTinggi + jarak);
+    // Label kategori
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(30);
+    let label = a.kategori.length > 24 ? a.kategori.substring(0, 23) + '…' : a.kategori;
+    doc.text(label, x, yy + barTinggi - 1);
+    // Latar bar
+    doc.setFillColor(238, 234, 222); doc.rect(barX, yy, barMax, barTinggi, 'F');
+    // Bar berwarna ikut tahap skor
+    const ratio = Math.max(0, Math.min(1, a.purata / maxSkala));
+    const warna = a.purata <= 2 ? [181, 71, 58] : (a.purata < 3.5 ? [201, 134, 43] : [63, 143, 95]);
+    doc.setFillColor(warna[0], warna[1], warna[2]);
+    doc.rect(barX, yy, barMax * ratio, barTinggi, 'F');
+    // Nilai purata
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(30);
+    doc.text(a.purata.toFixed(2), barX + barMax + 3, yy + barTinggi - 1);
   });
+  return y + analitik.length * (barTinggi + jarak) + 2; // Y seterusnya
 }
 
 async function tambahKepalaSurat(doc, tajuk, subtajuk) {
@@ -771,132 +773,149 @@ async function tambahKepalaSurat(doc, tajuk, subtajuk) {
   return 42; // Y permulaan kandungan
 }
 
-// --- Laporan 1 Sesi Lawatan ---
+// Helper: seksyen analisis kategori (bar native + jadual purata + perkara terlemah)
+function seksyenAnalitikKategori(doc, y, analitik) {
+  if (!analitik || analitik.length === 0) {
+    doc.setFontSize(10); doc.setTextColor(100);
+    doc.text('Tiada data pemantauan untuk dianalisis.', 14, y);
+    return y + 8;
+  }
+  // Carta bar purata skor setiap kategori
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(15, 32, 56);
+  doc.text('Purata Skor Mengikut Kategori', 14, y); y += 6;
+  y = lukisBarKategori(doc, 14, y, 182, analitik.map(a => ({ kategori: a.kategori, purata: a.purata })));
+  y += 6;
+
+  // Jadual ringkasan: kategori | purata | bil item | 3 perkara terlemah
+  if (y > 230) { doc.addPage(); y = 20; }
+  doc.autoTable({
+    startY: y,
+    head: [['Kategori', 'Purata', 'Bil. Item', 'Perkara Perlu Perhatian (skor terendah)']],
+    body: analitik.map(a => [
+      a.kategori,
+      a.purata.toFixed(2),
+      a.bilItem,
+      a.itemTerlemah.map(it => `${it.perkara} (${it.purata.toFixed(1)})`).join('; ')
+    ]),
+    styles: { fontSize: 8, cellPadding: 2.5, valign: 'middle' },
+    columnStyles: { 0: { cellWidth: 34 }, 1: { cellWidth: 16, halign: 'center' }, 2: { cellWidth: 16, halign: 'center' }, 3: { cellWidth: 116 } },
+    headStyles: { fillColor: [15, 32, 56] }
+  });
+  return doc.lastAutoTable.finalY + 8;
+}
+
+function semakLib(doc) {
+  if (!window.jspdf || !window.jspdf.jsPDF) throw new Error('Perpustakaan PDF (jsPDF) belum dimuatkan. Semak sambungan internet.');
+  if (doc && typeof doc.autoTable !== 'function') throw new Error('Plugin jadual PDF (autotable) belum dimuatkan. Cuba hard refresh (Ctrl+Shift+R).');
+}
+
+// --- Laporan 1 Sesi Lawatan (analisis kategori) ---
 async function janaLaporanLawatan(pemantauanId) {
   if (!window.jspdf || !window.jspdf.jsPDF) throw new Error('Perpustakaan PDF (jsPDF) belum dimuatkan. Semak sambungan internet.');
   const result = await callApi('getPemantauanDetail', { id: pemantauanId });
   const p = result.pemantauan;
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
-  if (typeof doc.autoTable !== 'function') throw new Error('Plugin jadual PDF (autotable) belum dimuatkan. Cuba hard refresh (Ctrl+Shift+R).');
+  semakLib(doc);
   let y = await tambahKepalaSurat(doc, 'Laporan Pemantauan Sekolah', `${p.namaSekolah} (${p.kodSekolah}) · ${p.ppd}`);
 
   doc.setFontSize(10); doc.setTextColor(30);
   doc.text(`Pegawai Pemantau: ${p.namaPegawai}`, 14, y);
   doc.text(`Tarikh/Masa: ${new Date(p.tarikhMasa).toLocaleString('ms-MY')}`, 14, y + 6);
-  y += 14;
+  y += 16;
 
-  // Purata skor ikut kategori untuk lawatan ini
-  const purataKat = {};
+  // Bina analitik kategori bagi lawatan ini
+  const katMap = {};
   result.dapatan.forEach(d => {
-    if (!purataKat[d.kategori]) purataKat[d.kategori] = { total: 0, n: 0 };
-    purataKat[d.kategori].total += Number(d.skala); purataKat[d.kategori].n += 1;
+    if (!katMap[d.kategori]) katMap[d.kategori] = { total: 0, bil: 0, items: [] };
+    katMap[d.kategori].total += Number(d.skala); katMap[d.kategori].bil += 1;
+    katMap[d.kategori].items.push({ perkara: d.perkara, purata: Number(d.skala) });
   });
-  const labels = Object.keys(purataKat);
-  const nilai = labels.map(k => (purataKat[k].total / purataKat[k].n).toFixed(2));
+  const analitik = Object.keys(katMap).map(nama => {
+    const c = katMap[nama];
+    const itemTerlemah = c.items.slice().sort((a, b) => a.purata - b.purata).slice(0, 3);
+    return { kategori: nama, purata: c.total / c.bil, bilItem: c.bil, itemTerlemah };
+  }).sort((a, b) => a.purata - b.purata);
 
-  const chartImg = await chartToImage('bar',
-    { labels, datasets: [{ label: 'Purata Skor', data: nilai, backgroundColor: '#c8a24a' }] },
-    { scales: { y: { min: 0, max: 5 } }, plugins: { legend: { display: false } } });
-  if (chartImg) { doc.addImage(chartImg, 'PNG', 14, y, 182, 80); y += 88; }
-
-  doc.autoTable({
-    startY: y,
-    head: [['Kategori', 'Perkara', 'Skor', 'Catatan']],
-    body: result.dapatan.map(d => [d.kategori, d.perkara, `${d.skala}/5`, d.catatan || '-']),
-    styles: { fontSize: 8.5 }, headStyles: { fillColor: [15, 32, 56] }
-  });
+  y = seksyenAnalitikKategori(doc, y, analitik);
 
   doc.save(`Laporan_Lawatan_${p.kodSekolah}_${Utilities_formatTarikhFail()}.pdf`);
 }
 
-// --- Laporan 1 Sekolah (semua lawatan) — Admin ---
+// --- Laporan 1 Sekolah (analisis kategori merentasi semua lawatan) — Admin ---
 async function janaLaporanSekolah(kodSekolah, namaSekolah) {
   if (!window.jspdf || !window.jspdf.jsPDF) throw new Error('Perpustakaan PDF (jsPDF) belum dimuatkan. Semak sambungan internet.');
-  const data = await callApi('getLaporanSekolah', { kodSekolah });
+  const data = await callApi('getAnalitikKategori', { kodSekolah });
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
-  if (typeof doc.autoTable !== 'function') throw new Error('Plugin jadual PDF (autotable) belum dimuatkan. Cuba hard refresh (Ctrl+Shift+R).');
-  let y = await tambahKepalaSurat(doc, 'Laporan Penuh Sekolah', `${namaSekolah} (${kodSekolah}) — ${data.lawatan.length} sesi pemantauan`);
-
-  if (data.lawatan.length > 0) {
-    // Trend line: purata skor keseluruhan setiap lawatan (rentas semua kategori)
-    const labels = data.lawatan.map(l => new Date(l.tarikhMasa).toLocaleDateString('ms-MY'));
-    const purataKeseluruhan = data.lawatan.map(l => {
-      const total = l.purataKategori.reduce((s, k) => s + k.purata, 0);
-      return (total / (l.purataKategori.length || 1)).toFixed(2);
-    });
-    const chartImg = await chartToImage('line',
-      { labels, datasets: [{ label: 'Purata Skor Keseluruhan', data: purataKeseluruhan, borderColor: '#0f2038', backgroundColor: 'rgba(15,32,56,.1)', fill: true, tension: .3 }] },
-      { scales: { y: { min: 0, max: 5 } }, plugins: { legend: { display: false } } });
-    if (chartImg) { doc.addImage(chartImg, 'PNG', 14, y, 182, 80); y += 88; }
-
-    doc.autoTable({
-      startY: y,
-      head: [['Tarikh', 'Pegawai', 'Bil. Item Disemak', 'Purata Skor']],
-      body: data.lawatan.map((l, i) => [new Date(l.tarikhMasa).toLocaleDateString('ms-MY'), l.namaPegawai, l.jumlahItem, purataKeseluruhan[i]]),
-      styles: { fontSize: 8.5 }, headStyles: { fillColor: [15, 32, 56] }
-    });
-    y = doc.lastAutoTable.finalY + 10;
-  } else {
-    doc.setFontSize(11); doc.text('Tiada sejarah pemantauan bagi sekolah ini.', 14, y); y += 10;
-  }
-
-  if (data.tindakSusulBelumSelesai.length > 0) {
-    if (y > 250) { doc.addPage(); y = 20; }
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(181, 71, 58);
-    doc.text('Tindak Susul Belum Selesai', 14, y); y += 6;
-    doc.autoTable({
-      startY: y,
-      head: [['Kategori', 'Perkara', 'Skor', 'Status']],
-      body: data.tindakSusulBelumSelesai.map(t => [t.kategori, t.perkara, `${t.skala}/5`, t.status]),
-      styles: { fontSize: 8.5 }, headStyles: { fillColor: [181, 71, 58] }
-    });
-  }
-
-  doc.save(`Laporan_Sekolah_${kodSekolah}_${Utilities_formatTarikhFail()}.pdf`);
-}
-
-// --- Laporan Keseluruhan JPN — Admin ---
-async function janaLaporanKeseluruhan() {
-  if (!window.jspdf || !window.jspdf.jsPDF) throw new Error('Perpustakaan PDF (jsPDF) belum dimuatkan. Semak sambungan internet.');
-  const data = await callApi('getLaporanKeseluruhan', {});
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  if (typeof doc.autoTable !== 'function') throw new Error('Plugin jadual PDF (autotable) belum dimuatkan. Cuba hard refresh (Ctrl+Shift+R).');
-  let y = await tambahKepalaSurat(doc, 'Laporan Keseluruhan Pemantauan Sekolah', `Ringkasan JPN Kedah — ${data.jumlahSekolahKeseluruhan} sekolah berdaftar`);
+  semakLib(doc);
+  let y = await tambahKepalaSurat(doc, 'Laporan Analisis Kategori — Sekolah', `${namaSekolah} (${kodSekolah})`);
 
   doc.setFontSize(10); doc.setTextColor(30);
-  doc.text(`Jumlah Pemantauan Dijalankan: ${data.ringkasan.jumlahPemantauan}`, 14, y);
-  doc.text(`Sekolah Telah Dipantau: ${data.ringkasan.jumlahSekolahDipantau} / ${data.jumlahSekolahKeseluruhan}`, 14, y + 6);
-  doc.text(`Tindak Susul Belum Selesai: ${data.tindakSusulBelumSelesai}`, 14, y + 12);
-  y += 20;
+  doc.text(`Jumlah Lawatan: ${data.jumlahLawatan}`, 14, y);
+  y += 12;
 
-  const chartImg = await chartToImage('bar',
-    { labels: data.ringkasan.purataKategori.map(k => k.kategori), datasets: [{ label: 'Purata Skor', data: data.ringkasan.purataKategori.map(k => k.purata), backgroundColor: '#c8a24a' }] },
-    { scales: { y: { min: 0, max: 5 } }, plugins: { legend: { display: false } } });
-  if (chartImg) { doc.addImage(chartImg, 'PNG', 14, y, 182, 80); y += 88; }
+  y = seksyenAnalitikKategori(doc, y, data.analitik);
 
-  const trendImg = await chartToImage('line',
-    { labels: data.ringkasan.trendBulanan.map(t => t.bulan), datasets: [{ label: 'Bilangan Lawatan', data: data.ringkasan.trendBulanan.map(t => t.bilangan), borderColor: '#0f2038', backgroundColor: 'rgba(15,32,56,.1)', fill: true, tension: .3 }] },
-    { plugins: { legend: { display: false } } });
-  if (trendImg) {
-    if (y > 190) { doc.addPage(); y = 20; }
-    doc.addImage(trendImg, 'PNG', 14, y, 182, 80);
-    y += 88;
+  doc.save(`Laporan_Kategori_Sekolah_${kodSekolah}_${Utilities_formatTarikhFail()}.pdf`);
+}
+
+// --- Laporan Keseluruhan JPN (analisis kategori seluruh negeri) — Admin ---
+async function janaLaporanKeseluruhan() {
+  if (!window.jspdf || !window.jspdf.jsPDF) throw new Error('Perpustakaan PDF (jsPDF) belum dimuatkan. Semak sambungan internet.');
+  const data = await callApi('getAnalitikKategori', {});
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  semakLib(doc);
+  let y = await tambahKepalaSurat(doc, 'Laporan Analisis Kategori — Keseluruhan JPN', `Kedah — merentasi semua sekolah dipantau`);
+
+  doc.setFontSize(10); doc.setTextColor(30);
+  doc.text(`Jumlah Lawatan: ${data.jumlahLawatan}`, 14, y);
+  doc.text(`Sekolah Dipantau: ${data.jumlahSekolah}`, 14, y + 6);
+  y += 16;
+
+  y = seksyenAnalitikKategori(doc, y, data.analitik);
+
+  doc.save(`Laporan_Kategori_JPN_${Utilities_formatTarikhFail()}.pdf`);
+}
+
+// --- Laporan Analitik Mengikut Pegawai — Admin ---
+async function janaLaporanPegawai(pegawaiId) {
+  if (!window.jspdf || !window.jspdf.jsPDF) throw new Error('Perpustakaan PDF (jsPDF) belum dimuatkan. Semak sambungan internet.');
+  const data = await callApi('getAnalitikPegawai', pegawaiId ? { pegawaiId } : {});
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  semakLib(doc);
+  const tajukSub = pegawaiId ? (data.senarai[0]?.nama || 'Pegawai') : 'Semua Pegawai';
+  let y = await tambahKepalaSurat(doc, 'Laporan Analitik Mengikut Pegawai', tajukSub);
+
+  if (!data.senarai || data.senarai.length === 0) {
+    doc.setFontSize(10); doc.setTextColor(100);
+    doc.text('Tiada data pemantauan untuk pegawai ini.', 14, y);
+    doc.save(`Laporan_Pegawai_${Utilities_formatTarikhFail()}.pdf`);
+    return;
   }
 
-  if (y > 220) { doc.addPage(); y = 20; }
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(15, 32, 56);
-  doc.text('10 Sekolah Dengan Purata Skor Terendah', 14, y); y += 6;
-  doc.autoTable({
-    startY: y,
-    head: [['Sekolah', 'Kod', 'Purata Skor']],
-    body: data.sekolahPalingLemah.map(s => [s.namaSekolah, s.kodSekolah, s.purata.toFixed(2)]),
-    styles: { fontSize: 8.5 }, headStyles: { fillColor: [15, 32, 56] }
+  data.senarai.forEach((pg, idx) => {
+    if (y > 235) { doc.addPage(); y = 20; }
+    // Tajuk pegawai
+    doc.setFillColor(15, 32, 56); doc.rect(14, y, 182, 8, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(255);
+    doc.text(`${pg.nama}`, 16, y + 5.5);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+    doc.text(`${pg.jumlahLawatan} lawatan · ${pg.jumlahSekolah} sekolah · Purata keseluruhan: ${pg.purataKeseluruhan.toFixed(2)}`, 196, y + 5.5, { align: 'right' });
+    y += 12;
+
+    // Analitik kategori pegawai ni (bar native)
+    if (pg.analitikKategori.length > 0) {
+      y = lukisBarKategori(doc, 14, y, 182, pg.analitikKategori.map(k => ({ kategori: k.kategori, purata: k.purata })));
+      y += 8;
+    } else {
+      doc.setFontSize(9); doc.setTextColor(120); doc.text('Tiada dapatan direkodkan.', 16, y); y += 8;
+    }
   });
 
-  doc.save(`Laporan_Keseluruhan_JPN_${Utilities_formatTarikhFail()}.pdf`);
+  doc.save(`Laporan_Pegawai_${Utilities_formatTarikhFail()}.pdf`);
 }
 </script>
 </body>
