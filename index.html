@@ -95,13 +95,10 @@
   .kategori-tabs button .badge{background:var(--brass);color:var(--navy-950);border-radius:10px;padding:1px 6px;font-size:10px;margin-left:6px;}
   .item-row{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:12px;}
   .item-row .perkara{font-weight:600;font-size:14px;color:var(--navy-900);margin-bottom:10px;}
-  .skala-btns{display:flex;gap:6px;margin-bottom:10px;}
-  .skala-btns button{width:42px;height:38px;border-radius:8px;border:1.5px solid var(--line);background:#fdfcf9;font-weight:700;font-size:14px;color:var(--muted);}
-  .skala-btns button.sel-1{background:var(--bad);color:#fff;border-color:var(--bad);}
-  .skala-btns button.sel-2{background:#c9862b;color:#fff;border-color:#c9862b;}
-  .skala-btns button.sel-3{background:#d4b83a;color:#1b2430;border-color:#d4b83a;}
-  .skala-btns button.sel-4{background:#7fa869;color:#fff;border-color:#7fa869;}
-  .skala-btns button.sel-5{background:var(--ok);color:#fff;border-color:var(--ok);}
+  .binari-btns{display:flex;gap:10px;margin-bottom:10px;}
+  .binari-btns button{flex:1;max-width:180px;height:44px;border-radius:8px;border:1.5px solid var(--line);background:#fdfcf9;font-weight:700;font-size:14px;color:var(--muted);}
+  .binari-btns button.sel-positif{background:var(--ok);color:#fff;border-color:var(--ok);}
+  .binari-btns button.sel-negatif{background:var(--bad);color:#fff;border-color:var(--bad);}
   .item-row textarea{min-height:56px;resize:vertical;}
   .item-row .photo-row{margin-top:10px;display:flex;align-items:center;gap:12px;}
   .item-row .photo-row img{height:52px;border-radius:8px;border:1px solid var(--line);}
@@ -167,8 +164,8 @@
       <img src="logo.png" alt="Logo JPN Kedah" class="crest">
       <h1>Pemantauan Sekolah</h1>
       <p class="tag">Hadir Membimbing, Bersama Membina Kejayaan</p>
-      <label>E-mel</label>
-      <input type="email" id="login-emel" placeholder="nama@moe-dl.edu.my">
+      <label>ID Pengguna</label>
+      <input type="text" id="login-emel" placeholder="cth: shahril" autocapitalize="off" autocomplete="username">
       <label>PIN</label>
       <input type="password" id="login-pin" placeholder="••••">
       <button class="btn-primary" onclick="doLogin()">Log Masuk</button>
@@ -192,7 +189,7 @@
 <script>
 /* ================= KONFIGURASI ================= */
 // GANTI dengan URL Web App selepas deploy Apps Script (Deploy > New deployment > Web app)
-const API_URL = 'https://script.google.com/macros/s/AKfycbwpOhctNLf6Ov32P93gY3k49RqIxghkUljlY0W0BIZJbmQg2jKKY9aQgrrgLge-xjG7/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbxo8sh2QIEIHEMYe-rpo0UiwODq27-9C4UUkKvarEoLrn1FikYqjzMdncUla8cURJji/exec';
 
 let CURRENT_USER = null;
 let KATEGORI_DATA = [];
@@ -216,7 +213,7 @@ async function doLogin() {
   const pin = document.getElementById('login-pin').value.trim();
   const errEl = document.getElementById('login-error');
   errEl.classList.add('hidden');
-  if (!emel || !pin) { errEl.textContent = 'Sila isi e-mel dan PIN.'; errEl.classList.remove('hidden'); return; }
+  if (!emel || !pin) { errEl.textContent = 'Sila isi ID Pengguna dan PIN.'; errEl.classList.remove('hidden'); return; }
   const result = await callApi('login', { emel, pin });
   if (!result.success) { errEl.textContent = result.message || 'Log masuk gagal.'; errEl.classList.remove('hidden'); return; }
   CURRENT_USER = result.user;
@@ -326,7 +323,7 @@ function renderBorangPemantauan() {
 function renderKategoriTabs() {
   const el = document.getElementById('kategori-tabs');
   el.innerHTML = KATEGORI_DATA.map(k => {
-    const diisi = k.items.filter(i => DAPATAN_STATE[i.id]?.skala).length;
+    const diisi = k.items.filter(i => DAPATAN_STATE[i.id]?.jawapan).length;
     return `<button class="${k.id === ACTIVE_KATEGORI_ID ? 'active' : ''}" onclick="gantiKategori(${k.id})">
       ${k.nama} <span class="badge">${diisi}/${k.items.length}</span></button>`;
   }).join('');
@@ -339,12 +336,17 @@ function renderItemList() {
   const el = document.getElementById('item-list');
   el.innerHTML = kat.items.map(item => {
     const state = DAPATAN_STATE[item.id] || {};
+    const pos = item.opsiPositif || 'Ada';
+    const neg = item.opsiNegatif || 'Tiada';
+    const selPos = state.jawapan === pos ? 'sel-positif' : '';
+    const selNeg = state.jawapan === neg ? 'sel-negatif' : '';
     return `<div class="item-row">
       <div class="perkara">${item.perkara}</div>
-      <div class="skala-btns">
-        ${[1,2,3,4,5].map(n => `<button class="${state.skala === n ? 'sel-'+n : ''}" onclick="setSkala(${item.id},${n})">${n}</button>`).join('')}
+      <div class="binari-btns">
+        <button class="${selPos}" onclick="setJawapan(${item.id},'${pos.replace(/'/g,"\\'")}',true)">✓ ${pos}</button>
+        <button class="${selNeg}" onclick="setJawapan(${item.id},'${neg.replace(/'/g,"\\'")}',false)">✕ ${neg}</button>
       </div>
-      <textarea placeholder="Catatan (wajib jika skor rendah)..." oninput="setCatatan(${item.id}, this.value)">${state.catatan || ''}</textarea>
+      <textarea placeholder="Catatan (digalakkan jika jawapan negatif)..." oninput="setCatatan(${item.id}, this.value)">${state.catatan || ''}</textarea>
       <div class="photo-row">
         <label class="photo-btn" style="margin:0;">📷 Muat Naik Gambar
           <input type="file" accept="image/*" capture="environment" style="display:none" onchange="setGambar(${item.id}, this)">
@@ -355,8 +357,8 @@ function renderItemList() {
   }).join('');
 }
 
-function setSkala(itemId, n) {
-  DAPATAN_STATE[itemId] = { ...(DAPATAN_STATE[itemId] || {}), skala: n };
+function setJawapan(itemId, jawapan, positif) {
+  DAPATAN_STATE[itemId] = { ...(DAPATAN_STATE[itemId] || {}), jawapan: jawapan, positif: positif };
   renderKategoriTabs(); renderItemList();
 }
 function setCatatan(itemId, val) { DAPATAN_STATE[itemId] = { ...(DAPATAN_STATE[itemId] || {}), catatan: val }; }
@@ -368,14 +370,20 @@ function setGambar(itemId, input) {
 }
 
 async function hantarPemantauan() {
-  const dapatan = Object.keys(DAPATAN_STATE).filter(id => DAPATAN_STATE[id].skala).map(id => ({
-    itemId: id, skala: DAPATAN_STATE[id].skala, catatan: DAPATAN_STATE[id].catatan || '', gambarBase64: DAPATAN_STATE[id].gambarBase64 || ''
+  const dapatan = Object.keys(DAPATAN_STATE).filter(id => DAPATAN_STATE[id].jawapan).map(id => ({
+    itemId: id, jawapan: DAPATAN_STATE[id].jawapan, positif: DAPATAN_STATE[id].positif,
+    catatan: DAPATAN_STATE[id].catatan || '', gambarBase64: DAPATAN_STATE[id].gambarBase64 || ''
   }));
-  if (dapatan.length === 0) { alert('Sila isi sekurang-kurangnya satu perkara semakan sebelum hantar.'); return; }
+  if (dapatan.length === 0) { alert('Sila jawab sekurang-kurangnya satu perkara semakan sebelum hantar.'); return; }
   const result = await callApi('submitPemantauan', {
     kodSekolah: SELECTED_SEKOLAH.KodSekolah, pegawaiId: CURRENT_USER.id, namaPegawai: CURRENT_USER.nama, dapatan
   });
-  if (result.success) { alert('Pemantauan berjaya dihantar.'); nav('pilihsekolah'); }
+  if (result.success) {
+    const msg = result.jumlahNegatif > 0
+      ? `Pemantauan berjaya dihantar. ${result.jumlahNegatif} dapatan negatif telah direkodkan sebagai Tindak Susul & notifikasi dihantar ke Admin.`
+      : 'Pemantauan berjaya dihantar.';
+    alert(msg); nav('pilihsekolah');
+  }
   else alert('Ralat: ' + (result.error || result.message));
 }
 
@@ -462,7 +470,10 @@ function Utilities_formatTarikhFail() {
 async function lihatDetail(id) {
   const result = await callApi('getPemantauanDetail', { id });
   const p = result.pemantauan;
-  const rows = result.dapatan.map(d => `<tr><td>${d.kategori}</td><td>${d.perkara}</td><td>${d.skala}/5</td><td>${d.catatan || '-'}</td><td>${d.linkGambar ? `<a href="${d.linkGambar}" target="_blank">Lihat</a>` : '-'}</td></tr>`).join('');
+  const rows = result.dapatan.map(d => {
+    const warna = d.positif ? 'var(--ok)' : 'var(--bad)';
+    return `<tr><td>${d.kategori}</td><td>${d.perkara}</td><td><b style="color:${warna}">${d.jawapan || '-'}</b></td><td>${d.catatan || '-'}</td><td>${d.linkGambar ? `<a href="${d.linkGambar}" target="_blank">Lihat</a>` : '-'}</td></tr>`;
+  }).join('');
   const laporanSekolahBtn = CURRENT_USER.peranan === 'Admin'
     ? `<button class="btn-outline" onclick="dgnLoading(this,'Menjana PDF...',()=>janaLaporanSekolah('${p.kodSekolah}','${p.namaSekolah.replace(/'/g,"\\'")}'))">📊 Analisis Kategori — Sekolah Ini</button>`
     : '';
@@ -474,7 +485,7 @@ async function lihatDetail(id) {
       <button class="btn-gold" onclick="dgnLoading(this,'Menjana PDF...',()=>janaLaporanLawatan(${p.id}))">📄 Muat Turun Laporan Lawatan Ini (PDF)</button>
       ${laporanSekolahBtn}
     </div>
-    <table><thead><tr><th>Kategori</th><th>Perkara</th><th>Skor</th><th>Catatan</th><th>Gambar</th></tr></thead><tbody>${rows}</tbody></table>`;
+    <table><thead><tr><th>Kategori</th><th>Perkara</th><th>Jawapan</th><th>Catatan</th><th>Gambar</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 /* ================= ADMIN: DASHBOARD ================= */
@@ -483,17 +494,22 @@ async function renderDashboard() {
   c.innerHTML = `<h2>Dashboard Pemantauan</h2><p class="lede">Ringkasan keseluruhan pemantauan sekolah JPN Kedah.</p>
     <div class="grid-stats" id="stat-cards"></div>
     <div class="charts-grid">
-      <div class="card"><h3 style="margin-top:0;font-size:15px;">Purata Skor Ikut Kategori</h3><canvas id="chart-kategori"></canvas></div>
+      <div class="card"><h3 style="margin-top:0;font-size:15px;">Bilangan Ada vs Tiada Ikut Kategori</h3><canvas id="chart-kategori"></canvas></div>
       <div class="card"><h3 style="margin-top:0;font-size:15px;">Trend Bilangan Pemantauan (Bulanan)</h3><canvas id="chart-trend"></canvas></div>
     </div>`;
   const stats = await callApi('getDashboardStats', {});
+  const jumNegatif = stats.kiraKategori.reduce((s, k) => s + k.negatif, 0);
   document.getElementById('stat-cards').innerHTML = `
     <div class="stat"><div class="num">${stats.jumlahPemantauan}</div><div class="lbl">Jumlah Pemantauan</div></div>
-    <div class="stat"><div class="num">${stats.jumlahSekolahDipantau}</div><div class="lbl">Sekolah Telah Dipantau</div></div>`;
+    <div class="stat"><div class="num">${stats.jumlahSekolahDipantau}</div><div class="lbl">Sekolah Telah Dipantau</div></div>
+    <div class="stat" style="border-left-color:var(--bad);"><div class="num">${jumNegatif}</div><div class="lbl">Jumlah Dapatan 'Tiada'</div></div>`;
   new Chart(document.getElementById('chart-kategori'), {
     type: 'bar',
-    data: { labels: stats.purataKategori.map(k => k.kategori), datasets: [{ label: 'Purata Skor', data: stats.purataKategori.map(k => k.purata), backgroundColor: '#c8a24a' }] },
-    options: { scales: { y: { min: 0, max: 5 } }, plugins: { legend: { display: false } } }
+    data: { labels: stats.kiraKategori.map(k => k.kategori), datasets: [
+      { label: 'Ada / Ya', data: stats.kiraKategori.map(k => k.positif), backgroundColor: '#3f8f5f' },
+      { label: 'Tiada / Tidak', data: stats.kiraKategori.map(k => k.negatif), backgroundColor: '#b5473a' }
+    ] },
+    options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }, plugins: { legend: { position: 'bottom' } } }
   });
   new Chart(document.getElementById('chart-trend'), {
     type: 'line',
@@ -519,8 +535,13 @@ function renderKategoriManage() {
         <h3 style="margin:0;font-size:16px;">${k.nama}</h3>
         <span class="tag-kategori">${k.items.length} perkara</span>
       </div>
-      ${k.items.map(i => `<div class="kategori-manage-row"><span>${i.perkara}</span></div>`).join('')}
-      <div class="add-form"><input type="text" id="new-item-${k.id}" placeholder="Tambah perkara semakan baharu..."><button onclick="tambahItem(${k.id})">+ Tambah</button></div>
+      ${k.items.map(i => `<div class="kategori-manage-row"><span>${i.perkara}</span><span style="font-size:11px;color:var(--muted);">${i.opsiPositif} / ${i.opsiNegatif}</span></div>`).join('')}
+      <div class="add-form" style="flex-wrap:wrap;">
+        <input type="text" id="new-item-${k.id}" placeholder="Tambah perkara semakan baharu..." style="flex:1 1 100%;">
+        <input type="text" id="pos-${k.id}" placeholder="Label positif (cth: Ada)" value="Ada" style="flex:1;">
+        <input type="text" id="neg-${k.id}" placeholder="Label negatif (cth: Tiada)" value="Tiada" style="flex:1;">
+        <button onclick="tambahItem(${k.id})">+ Tambah</button>
+      </div>
     </div>`).join('');
 }
 
@@ -534,10 +555,11 @@ async function tambahKategori() {
 }
 
 async function tambahItem(kategoriId) {
-  const input = document.getElementById(`new-item-${kategoriId}`);
-  const perkara = input.value.trim();
+  const perkara = document.getElementById(`new-item-${kategoriId}`).value.trim();
   if (!perkara) return;
-  await callApi('addItem', { kategoriId, perkara });
+  const opsiPositif = document.getElementById(`pos-${kategoriId}`).value.trim() || 'Ada';
+  const opsiNegatif = document.getElementById(`neg-${kategoriId}`).value.trim() || 'Tiada';
+  await callApi('addItem', { kategoriId, perkara, opsiPositif, opsiNegatif });
   KATEGORI_DATA = await callApi('getKategoriPenuh');
   renderKategoriManage();
 }
@@ -636,13 +658,7 @@ function resetTapisanPeta() {
 /* ================= TINDAK SUSUL (Admin) ================= */
 async function renderTindakSusul() {
   const c = document.getElementById('content');
-  const tetapan = await callApi('getTetapan', {});
-  c.innerHTML = `<h2>Tindak Susul — Skor Kritikal</h2><p class="lede">Dapatan berskor kritikal memerlukan catatan tindakan intervensi.</p>
-    <div class="settings-card">
-      <span style="font-weight:600;font-size:13px;color:var(--navy-800);">Ambang Skor Kritikal (≤):</span>
-      <input type="number" id="ambang-input" min="1" max="5" value="${tetapan.AmbangKritikal || 2}">
-      <button class="btn-outline" onclick="simpanAmbang()">Simpan Tetapan</button>
-    </div>
+  c.innerHTML = `<h2>Tindak Susul — Dapatan Negatif</h2><p class="lede">Setiap dapatan negatif (Tiada / Tidak / Tamat Tempoh) direkodkan di sini untuk tindakan intervensi.</p>
     <div class="filters">
       <select id="f-status" onchange="muatTindakSusul()">
         <option value="">Semua Status</option>
@@ -654,12 +670,6 @@ async function renderTindakSusul() {
     <div class="action-bar"><button class="btn-outline" onclick="dgnLoading(this,'Mengeksport...',()=>eksportTindakSusulExcel())">⬇️ Eksport Excel</button></div>
     <div id="tindaksusul-list">Memuatkan...</div>`;
   muatTindakSusul();
-}
-
-async function simpanAmbang() {
-  const value = document.getElementById('ambang-input').value;
-  await callApi('updateTetapan', { key: 'AmbangKritikal', value: Number(value) });
-  alert('Ambang skor kritikal dikemaskini kepada ' + value + '.');
 }
 
 let TINDAKSUSUL_TERKINI = [];
@@ -674,7 +684,7 @@ async function muatTindakSusul() {
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div>
           <b>${t.namaSekolah}</b> <span style="color:var(--muted);font-size:12px;">(${t.kodSekolah})</span><br>
-          <span style="font-size:13px;">[${t.kategori}] ${t.perkara} — Skor <b>${t.skala}/5</b></span><br>
+          <span style="font-size:13px;">[${t.kategori}] ${t.perkara} — <b style="color:var(--bad)">${t.jawapan || 'Tiada'}</b></span><br>
           <span style="font-size:11.5px;color:var(--muted);">Direkodkan: ${new Date(t.tarikhDapatan).toLocaleString('ms-MY')}</span>
         </div>
         <span class="status-pill ${statusClass(t.status)}">${t.status}</span>
@@ -693,7 +703,7 @@ async function muatTindakSusul() {
       <textarea id="catatan-${t.id}" placeholder="Cth: Perbincangan dengan GB, susulan lawatan pada...">${t.catatanTindakan || ''}</textarea>
       <div style="margin-top:10px;text-align:right;"><button class="btn-outline" onclick="simpanTindakSusul(${t.id})">Simpan</button></div>
     </div>
-  `).join('') || '<p style="color:var(--muted);">Tiada rekod skor kritikal.</p>';
+  `).join('') || '<p style="color:var(--muted);">Tiada dapatan negatif direkodkan.</p>';
 }
 
 async function simpanTindakSusul(id) {
@@ -711,7 +721,7 @@ async function simpanTindakSusul(id) {
 function eksportTindakSusulExcel() {
   if (TINDAKSUSUL_TERKINI.length === 0) { alert('Tiada data untuk dieksport.'); return; }
   const data = TINDAKSUSUL_TERKINI.map(t => ({
-    'Sekolah': t.namaSekolah, 'Kod': t.kodSekolah, 'Kategori': t.kategori, 'Perkara': t.perkara, 'Skor': t.skala,
+    'Sekolah': t.namaSekolah, 'Kod': t.kodSekolah, 'Kategori': t.kategori, 'Perkara': t.perkara, 'Jawapan': t.jawapan,
     'Tarikh Direkodkan': new Date(t.tarikhDapatan).toLocaleString('ms-MY'), 'Status': t.status,
     'Pegawai Bertanggungjawab': t.pegawaiBertanggungjawab || '', 'Catatan Tindakan': t.catatanTindakan || ''
   }));
@@ -755,30 +765,34 @@ async function getLogoBase64() {
   return LOGO_BASE64_CACHE;
 }
 
-// Lukis carta bar mendatar terus dalam jsPDF (tiada Chart.js — jauh lebih kukuh)
-// analitik: [{kategori, purata, bilItem}] ; skala max 5
-function lukisBarKategori(doc, x, y, lebarPenuh, analitik, maxSkala = 5) {
+// Lukis carta bar bertindan (Ada hijau / Tiada merah) terus dalam jsPDF
+// analitik: [{kategori, positif, negatif}]
+function lukisBarKategori(doc, x, y, lebarPenuh, analitik) {
   const barTinggi = 6, jarak = 4, labelLebar = 52;
   const barX = x + labelLebar;
-  const barMax = lebarPenuh - labelLebar - 16; // ruang untuk nilai di hujung
+  const barMax = lebarPenuh - labelLebar - 26; // ruang untuk nilai di hujung
   analitik.forEach((a, i) => {
     const yy = y + i * (barTinggi + jarak);
+    const jumlah = (a.positif || 0) + (a.negatif || 0);
     // Label kategori
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(30);
     let label = a.kategori.length > 24 ? a.kategori.substring(0, 23) + '…' : a.kategori;
     doc.text(label, x, yy + barTinggi - 1);
     // Latar bar
     doc.setFillColor(238, 234, 222); doc.rect(barX, yy, barMax, barTinggi, 'F');
-    // Bar berwarna ikut tahap skor
-    const ratio = Math.max(0, Math.min(1, a.purata / maxSkala));
-    const warna = a.purata <= 2 ? [181, 71, 58] : (a.purata < 3.5 ? [201, 134, 43] : [63, 143, 95]);
-    doc.setFillColor(warna[0], warna[1], warna[2]);
-    doc.rect(barX, yy, barMax * ratio, barTinggi, 'F');
-    // Nilai purata
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(30);
-    doc.text(a.purata.toFixed(2), barX + barMax + 3, yy + barTinggi - 1);
+    if (jumlah > 0) {
+      const wPos = barMax * (a.positif / jumlah);
+      const wNeg = barMax * (a.negatif / jumlah);
+      // Segmen 'Ada' (hijau)
+      doc.setFillColor(63, 143, 95); doc.rect(barX, yy, wPos, barTinggi, 'F');
+      // Segmen 'Tiada' (merah)
+      doc.setFillColor(181, 71, 58); doc.rect(barX + wPos, yy, wNeg, barTinggi, 'F');
+    }
+    // Nilai: Ada/Tiada
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(30);
+    doc.text(`${a.positif || 0}/${a.negatif || 0}`, barX + barMax + 3, yy + barTinggi - 1);
   });
-  return y + analitik.length * (barTinggi + jarak) + 2; // Y seterusnya
+  return y + analitik.length * (barTinggi + jarak) + 2;
 }
 
 async function tambahKepalaSurat(doc, tajuk, subtajuk) {
@@ -795,32 +809,37 @@ async function tambahKepalaSurat(doc, tajuk, subtajuk) {
   return 42; // Y permulaan kandungan
 }
 
-// Helper: seksyen analisis kategori (bar native + jadual purata + perkara terlemah)
+// Helper: seksyen analisis kategori (bar bertindan Ada/Tiada + jadual bilangan + perkara perlu perhatian)
 function seksyenAnalitikKategori(doc, y, analitik) {
   if (!analitik || analitik.length === 0) {
     doc.setFontSize(10); doc.setTextColor(100);
     doc.text('Tiada data pemantauan untuk dianalisis.', 14, y);
     return y + 8;
   }
-  // Carta bar purata skor setiap kategori
+  // Petunjuk warna
   doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(15, 32, 56);
-  doc.text('Purata Skor Mengikut Kategori', 14, y); y += 6;
-  y = lukisBarKategori(doc, 14, y, 182, analitik.map(a => ({ kategori: a.kategori, purata: a.purata })));
+  doc.text('Bilangan Ada vs Tiada Mengikut Kategori', 14, y); y += 6;
+  doc.setFillColor(63,143,95); doc.rect(14, y-3.5, 3.5, 3.5, 'F');
+  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(60);
+  doc.text('Ada / Ya', 19, y-0.5);
+  doc.setFillColor(181,71,58); doc.rect(44, y-3.5, 3.5, 3.5, 'F');
+  doc.text('Tiada / Tidak / Tamat Tempoh   (nilai di hujung bar: Ada/Tiada)', 49, y-0.5);
+  y += 4;
+  y = lukisBarKategori(doc, 14, y, 182, analitik);
   y += 6;
 
-  // Jadual ringkasan: kategori | purata | bil item | 3 perkara terlemah
-  if (y > 230) { doc.addPage(); y = 20; }
+  if (y > 225) { doc.addPage(); y = 20; }
   doc.autoTable({
     startY: y,
-    head: [['Kategori', 'Purata', 'Bil. Item', 'Perkara Perlu Perhatian (skor terendah)']],
+    head: [['Kategori', 'Ada', 'Tiada', 'Perkara Perlu Perhatian (paling banyak Tiada)']],
     body: analitik.map(a => [
       a.kategori,
-      a.purata.toFixed(2),
-      a.bilItem,
-      a.itemTerlemah.map(it => `${it.perkara} (${it.purata.toFixed(1)})`).join('; ')
+      a.positif,
+      a.negatif,
+      a.itemTerlemah.length ? a.itemTerlemah.map(it => `${it.perkara} (${it.negatif})`).join('; ') : '—'
     ]),
     styles: { fontSize: 8, cellPadding: 2.5, valign: 'middle' },
-    columnStyles: { 0: { cellWidth: 34 }, 1: { cellWidth: 16, halign: 'center' }, 2: { cellWidth: 16, halign: 'center' }, 3: { cellWidth: 116 } },
+    columnStyles: { 0: { cellWidth: 34 }, 1: { cellWidth: 14, halign: 'center' }, 2: { cellWidth: 14, halign: 'center' }, 3: { cellWidth: 120 } },
     headStyles: { fillColor: [15, 32, 56] }
   });
   return doc.lastAutoTable.finalY + 8;
@@ -846,18 +865,20 @@ async function janaLaporanLawatan(pemantauanId) {
   doc.text(`Tarikh/Masa: ${new Date(p.tarikhMasa).toLocaleString('ms-MY')}`, 14, y + 6);
   y += 16;
 
-  // Bina analitik kategori bagi lawatan ini
+  // Bina analitik kategori bagi lawatan ini (bilangan Ada/Tiada)
   const katMap = {};
   result.dapatan.forEach(d => {
-    if (!katMap[d.kategori]) katMap[d.kategori] = { total: 0, bil: 0, items: [] };
-    katMap[d.kategori].total += Number(d.skala); katMap[d.kategori].bil += 1;
-    katMap[d.kategori].items.push({ perkara: d.perkara, purata: Number(d.skala) });
+    if (!katMap[d.kategori]) katMap[d.kategori] = { positif: 0, negatif: 0, items: {} };
+    if (d.positif) katMap[d.kategori].positif += 1; else katMap[d.kategori].negatif += 1;
+    if (!katMap[d.kategori].items[d.perkara]) katMap[d.kategori].items[d.perkara] = { positif: 0, negatif: 0 };
+    if (d.positif) katMap[d.kategori].items[d.perkara].positif += 1; else katMap[d.kategori].items[d.perkara].negatif += 1;
   });
   const analitik = Object.keys(katMap).map(nama => {
     const c = katMap[nama];
-    const itemTerlemah = c.items.slice().sort((a, b) => a.purata - b.purata).slice(0, 3);
-    return { kategori: nama, purata: c.total / c.bil, bilItem: c.bil, itemTerlemah };
-  }).sort((a, b) => a.purata - b.purata);
+    const itemTerlemah = Object.keys(c.items).map(p => ({ perkara: p, negatif: c.items[p].negatif }))
+      .filter(it => it.negatif > 0).sort((a, b) => b.negatif - a.negatif).slice(0, 3);
+    return { kategori: nama, positif: c.positif, negatif: c.negatif, bilItem: c.positif + c.negatif, itemTerlemah };
+  }).sort((a, b) => b.negatif - a.negatif);
 
   y = seksyenAnalitikKategori(doc, y, analitik);
 
@@ -925,12 +946,12 @@ async function janaLaporanPegawai(pegawaiId) {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(255);
     doc.text(`${pg.nama}`, 16, y + 5.5);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
-    doc.text(`${pg.jumlahLawatan} lawatan · ${pg.jumlahSekolah} sekolah · Purata keseluruhan: ${pg.purataKeseluruhan.toFixed(2)}`, 196, y + 5.5, { align: 'right' });
+    doc.text(`${pg.jumlahLawatan} lawatan · ${pg.jumlahSekolah} sekolah · Ada: ${pg.jumlahPositif} / Tiada: ${pg.jumlahNegatif}`, 196, y + 5.5, { align: 'right' });
     y += 12;
 
-    // Analitik kategori pegawai ni (bar native)
+    // Analitik kategori pegawai ni (bar bertindan Ada/Tiada)
     if (pg.analitikKategori.length > 0) {
-      y = lukisBarKategori(doc, 14, y, 182, pg.analitikKategori.map(k => ({ kategori: k.kategori, purata: k.purata })));
+      y = lukisBarKategori(doc, 14, y, 182, pg.analitikKategori);
       y += 8;
     } else {
       doc.setFontSize(9); doc.setTextColor(120); doc.text('Tiada dapatan direkodkan.', 16, y); y += 8;
