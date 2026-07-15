@@ -201,7 +201,7 @@
 <script>
 /* ================= KONFIGURASI ================= */
 // GANTI dengan URL Web App selepas deploy Apps Script (Deploy > New deployment > Web app)
-const API_URL = 'https://script.google.com/macros/s/AKfycbyhvZIN6wiXmcLJ38d0ZGbPGH0X_5YURwB69_8M1iYsFF57U4h-OkhamLl5-hY2DQBY/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbyYE2RJA_xWvf1WZSZpCKXgmkf1ERZw0G3M5TQwdTTHewNCebJLuDqlePPgrKFTrYmz/exec';
 
 let CURRENT_USER = null;
 let KATEGORI_DATA = [];
@@ -478,11 +478,23 @@ async function renderSenarai() {
     </div>
     <div class="action-bar">
       <button class="btn-outline" onclick="dgnLoading(this,'Mengeksport...',()=>eksportSenaraiExcel())">⬇️ Eksport Excel</button>
+      ${CURRENT_USER.peranan === 'Admin' ? `<button class="btn-outline" style="border-color:var(--warn);color:var(--warn);" onclick="dgnLoading(this,'Memproses...',()=>buangDuplikasi())">🧹 Buang Duplikasi</button>` : ''}
       ${adminBtns}
     </div>
     <div id="senarai-table">Memuatkan...</div>`;
   muatSenarai();
   if (CURRENT_USER.peranan === 'Admin') isiDropdownPPD();
+}
+
+async function buangDuplikasi() {
+  if (!confirm('Buang rekod duplikasi?\n\nSistem akan menyimpan hanya rekod TERKINI bagi setiap gabungan (sekolah + pegawai + tarikh yang sama), dan memadam yang lebih lama.\n\nTindakan ini tidak boleh dibatalkan. Teruskan?')) return;
+  const hasil = await callApi('buangDuplikasi', {});
+  if (hasil.success) {
+    alert(`Selesai.\n\n${hasil.jumlahDibuang} rekod duplikasi telah dibuang (daripada ${hasil.jumlahKumpulanDuplikasi} kumpulan bertindih).\n\nHanya rekod terkini disimpan.`);
+    muatSenarai();
+  } else {
+    alert('Ralat: ' + (hasil.message || 'Gagal buang duplikasi.'));
+  }
 }
 
 async function isiDropdownPPD() {
@@ -519,8 +531,20 @@ async function muatSenarai() {
       <td style="white-space:nowrap;">
         <button onclick="lihatDetail(${p.id})" style="background:none;border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:12px;">Lihat</button>
         <button onclick="dgnLoading(this,'PDF...',()=>janaLaporanLawatan(${p.id}))" style="background:none;border:1px solid var(--brass-dark);color:var(--brass-dark);border-radius:8px;padding:6px 12px;font-size:12px;">PDF</button>
+        ${CURRENT_USER.peranan === 'Admin' ? `<button onclick="padamRekod(${p.id}, '${(p.namaSekolah||'').replace(/'/g,"\\'")}')" style="background:none;border:1px solid var(--bad);color:var(--bad);border-radius:8px;padding:6px 12px;font-size:12px;">Padam</button>` : ''}
       </td>
     </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);">Tiada rekod.</td></tr>'}</tbody></table>`;
+}
+
+async function padamRekod(id, namaSekolah) {
+  if (!confirm(`Padam rekod pemantauan untuk "${namaSekolah}"?\n\nData pemantauan, dapatan, dan tindak susul berkaitan akan dipadam sepenuhnya.\n\nTindakan ini tidak boleh dibatalkan. Teruskan?`)) return;
+  const hasil = await callApi('padamPemantauanAdmin', { pemantauanId: id });
+  if (hasil.success) {
+    alert('Rekod pemantauan telah dipadam.');
+    muatSenarai();
+  } else {
+    alert('Ralat: ' + (hasil.message || 'Gagal memadam rekod.'));
+  }
 }
 
 function eksportSenaraiExcel() {
