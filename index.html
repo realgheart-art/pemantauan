@@ -201,7 +201,7 @@
 <script>
 /* ================= KONFIGURASI ================= */
 // GANTI dengan URL Web App selepas deploy Apps Script (Deploy > New deployment > Web app)
-const API_URL = 'https://script.google.com/macros/s/AKfycbxYTERs0vB3jDZbULheSOAqXM013dYpd7Dfzy1Bi00X_kI7Trl5Hn4AcgULzKb8rpmx/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbyhvZIN6wiXmcLJ38d0ZGbPGH0X_5YURwB69_8M1iYsFF57U4h-OkhamLl5-hY2DQBY/exec';
 
 let CURRENT_USER = null;
 let KATEGORI_DATA = [];
@@ -336,7 +336,7 @@ function renderBorangPemantauan() {
     <p class="lede">${SELECTED_SEKOLAH.KodSekolah} · ${SELECTED_SEKOLAH.PPD} — isi dapatan mengikut kategori di bawah.</p>
     <div class="kategori-tabs" id="kategori-tabs"></div>
     <div id="item-list"></div>
-    <div class="submit-bar"><button onclick="hantarPemantauan()">Hantar Pemantauan</button></div>
+    <div class="submit-bar"><button onclick="dgnLoading(this,'Menghantar...',()=>hantarPemantauan())">Hantar Pemantauan</button></div>
   `;
   renderKategoriTabs();
   renderItemList();
@@ -370,8 +370,8 @@ function renderItemList() {
       </div>
       <textarea placeholder="Catatan (digalakkan jika jawapan negatif)..." oninput="setCatatan(${item.id}, this.value)">${state.catatan || ''}</textarea>
       <div class="photo-row">
-        <label class="photo-btn" style="margin:0;">📷 Muat Naik Gambar
-          <input type="file" accept="image/*" capture="environment" style="display:none" onchange="setGambar(${item.id}, this)">
+        <label class="photo-btn" style="margin:0;">📷 Ambil / Pilih Gambar
+          <input type="file" accept="image/*" style="display:none" onchange="setGambar(${item.id}, this)">
         </label>
         ${state.gambarBase64 ? `<img src="${state.gambarBase64}">` : ''}
       </div>
@@ -397,16 +397,39 @@ async function hantarPemantauan() {
     catatan: DAPATAN_STATE[id].catatan || '', gambarBase64: DAPATAN_STATE[id].gambarBase64 || ''
   }));
   if (dapatan.length === 0) { alert('Sila jawab sekurang-kurangnya satu perkara semakan sebelum hantar.'); return; }
+
+  // Semak dulu: adakah pegawai ini sudah pantau sekolah ini hari ini?
+  const semak = await callApi('semakPemantauanHariIni', {
+    kodSekolah: SELECTED_SEKOLAH.KodSekolah, pegawaiId: CURRENT_USER.id
+  });
+
+  let gantiId = null;
+  if (semak.wujud) {
+    const masa = new Date(semak.tarikhMasa).toLocaleString('ms-MY');
+    const sah = confirm(
+      `⚠️ AMARAN\n\nAnda telah pun membuat pemantauan untuk ${SELECTED_SEKOLAH.NamaSekolah} hari ini (${masa}).\n\n` +
+      `Jika anda teruskan, rekod lama itu akan DIGANTIKAN dengan hantaran ini (bukan ditambah sebagai rekod baharu).\n\n` +
+      `Teruskan dan ganti rekod lama?`
+    );
+    if (!sah) return; // pegawai batal
+    gantiId = semak.pemantauanId;
+  }
+
   const result = await callApi('submitPemantauan', {
-    kodSekolah: SELECTED_SEKOLAH.KodSekolah, pegawaiId: CURRENT_USER.id, namaPegawai: CURRENT_USER.nama, dapatan
+    kodSekolah: SELECTED_SEKOLAH.KodSekolah, pegawaiId: CURRENT_USER.id, namaPegawai: CURRENT_USER.nama, dapatan, gantiId
   });
   if (result.success) {
-    const msg = result.jumlahNegatif > 0
-      ? `Pemantauan berjaya dihantar. ${result.jumlahNegatif} dapatan negatif telah direkodkan sebagai Tindak Susul & notifikasi dihantar ke Admin.`
-      : 'Pemantauan berjaya dihantar.';
+    let msg = gantiId ? 'Rekod pemantauan hari ini telah dikemas kini (rekod lama diganti).' : 'Pemantauan berjaya dihantar.';
+    if (result.jumlahNegatif > 0) {
+      msg += `\n\n${result.jumlahNegatif} dapatan negatif direkodkan sebagai Tindak Susul untuk tindakan Admin.`;
+    }
     alert(msg); nav('pilihsekolah');
   }
-  else alert('Ralat: ' + (result.error || result.message));
+  else {
+    // Jika sistem sibuk, data pegawai KEKAL — mereka boleh tekan Hantar semula tanpa isi balik
+    alert('⚠️ ' + (result.error || result.message || 'Penghantaran tidak berjaya.') +
+      '\n\nData anda masih tersimpan dalam borang. Sila tekan "Hantar Pemantauan" sekali lagi.');
+  }
 }
 
 /* ================= SENARAI PEMANTAUAN (Admin & Pegawai) ================= */
