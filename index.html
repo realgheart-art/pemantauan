@@ -370,10 +370,13 @@ function renderItemList() {
       </div>
       <textarea placeholder="Catatan (digalakkan jika jawapan negatif)..." oninput="setCatatan(${item.id}, this.value)">${state.catatan || ''}</textarea>
       <div class="photo-row">
-        <label class="photo-btn" style="margin:0;">📷 Ambil / Pilih Gambar
+        <label class="photo-btn" style="margin:0;">📸 Ambil Guna Kamera
+          <input type="file" accept="image/*" capture="environment" style="display:none" onchange="setGambar(${item.id}, this)">
+        </label>
+        <label class="photo-btn" style="margin:0;">🖼️ Pilih dari Galeri
           <input type="file" accept="image/*" style="display:none" onchange="setGambar(${item.id}, this)">
         </label>
-        ${state.gambarBase64 ? `<img src="${state.gambarBase64}">` : ''}
+        ${state.gambarBase64 ? `<img src="${state.gambarBase64}"><button class="photo-btn" style="margin:0;border-color:var(--bad);color:var(--bad);" onclick="buangGambar(${item.id})">✕ Buang</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -387,8 +390,33 @@ function setCatatan(itemId, val) { DAPATAN_STATE[itemId] = { ...(DAPATAN_STATE[i
 function setGambar(itemId, input) {
   const file = input.files[0]; if (!file) return;
   const reader = new FileReader();
-  reader.onload = e => { DAPATAN_STATE[itemId] = { ...(DAPATAN_STATE[itemId] || {}), gambarBase64: e.target.result }; renderItemList(); };
+  reader.onload = e => {
+    // Mampatkan gambar dahulu — gambar kamera moden boleh 5-10MB, ini melambatkan upload.
+    const img = new Image();
+    img.onload = () => {
+      const maxLebar = 1000;
+      const skala = Math.min(1, maxLebar / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width * skala;
+      canvas.height = img.height * skala;
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      const mampat = canvas.toDataURL('image/jpeg', 0.7);
+      DAPATAN_STATE[itemId] = { ...(DAPATAN_STATE[itemId] || {}), gambarBase64: mampat };
+      renderItemList();
+    };
+    img.onerror = () => {
+      // Jika bukan imej yang boleh diproses, guna terus
+      DAPATAN_STATE[itemId] = { ...(DAPATAN_STATE[itemId] || {}), gambarBase64: e.target.result };
+      renderItemList();
+    };
+    img.src = e.target.result;
+  };
   reader.readAsDataURL(file);
+}
+
+function buangGambar(itemId) {
+  if (DAPATAN_STATE[itemId]) delete DAPATAN_STATE[itemId].gambarBase64;
+  renderItemList();
 }
 
 async function hantarPemantauan() {
