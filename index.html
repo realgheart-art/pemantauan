@@ -201,7 +201,7 @@
 <script>
 /* ================= KONFIGURASI ================= */
 // GANTI dengan URL Web App selepas deploy Apps Script (Deploy > New deployment > Web app)
-const API_URL = 'https://script.google.com/macros/s/AKfycbyYE2RJA_xWvf1WZSZpCKXgmkf1ERZw0G3M5TQwdTTHewNCebJLuDqlePPgrKFTrYmz/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbzZGE-Nn_Yc_pmVBwZfN7Rs0XxxtEnYFZJinQNPW2j90DykIyXhFBsev98RjMKWKeCu/exec';
 
 let CURRENT_USER = null;
 let KATEGORI_DATA = [];
@@ -486,15 +486,35 @@ async function renderSenarai() {
   if (CURRENT_USER.peranan === 'Admin') isiDropdownPPD();
 }
 
-async function buangDuplikasi() {
-  if (!confirm('Buang rekod duplikasi?\n\nSistem akan menyimpan hanya rekod TERKINI bagi setiap gabungan (sekolah + pegawai + tarikh yang sama), dan memadam yang lebih lama.\n\nTindakan ini tidak boleh dibatalkan. Teruskan?')) return;
-  const hasil = await callApi('buangDuplikasi', {});
-  if (hasil.success) {
-    alert(`Selesai.\n\n${hasil.jumlahDibuang} rekod duplikasi telah dibuang (daripada ${hasil.jumlahKumpulanDuplikasi} kumpulan bertindih).\n\nHanya rekod terkini disimpan.`);
-    muatSenarai();
-  } else {
-    alert('Ralat: ' + (hasil.message || 'Gagal buang duplikasi.'));
-  }
+function buangDuplikasi() {
+  tunjukModalPengesahan({
+    tajuk: 'Buang Rekod Duplikasi?',
+    kandungan: `<p style="margin:0 0 12px;">Sistem akan mencari rekod yang <b>pengisiannya betul-betul sama</b> — iaitu sekolah, pegawai, tarikh, DAN semua jawapan yang serupa.</p>
+      <div class="card" style="padding:12px 14px;margin-bottom:12px;font-size:13px;">
+        ✓ Hanya rekod yang <b>identik</b> dibuang (simpan yang terkini)<br>
+        ✓ Rekod dengan jawapan berbeza <b>tidak</b> disentuh
+      </div>
+      <p style="margin:0;color:var(--warn);font-size:13px;">⚠️ Tindakan ini tidak boleh dibatalkan.</p>`,
+    labelYa: 'Ya, Buang Duplikasi',
+    labelTidak: 'Batal',
+    warnaYa: 'var(--warn)',
+    onYa: async (btn) => {
+      await dgnLoading(btn, 'Memproses...', async () => {
+        const hasil = await callApi('buangDuplikasi', {});
+        tutupModal();
+        if (hasil.success) {
+          if (hasil.jumlahDibuang === 0) {
+            alert('Tiada duplikasi ditemui.\n\nSemua rekod mempunyai pengisian yang berbeza — tiada yang perlu dibuang.');
+          } else {
+            alert(`Selesai.\n\n${hasil.jumlahDibuang} rekod duplikasi (pengisian sama) telah dibuang daripada ${hasil.jumlahKumpulanDuplikasi} kumpulan bertindih.\n\nHanya rekod terkini disimpan.`);
+          }
+          muatSenarai();
+        } else {
+          alert('Ralat: ' + (hasil.message || 'Gagal buang duplikasi.'));
+        }
+      });
+    }
+  });
 }
 
 async function isiDropdownPPD() {
