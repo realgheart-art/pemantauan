@@ -531,20 +531,62 @@ async function muatSenarai() {
       <td style="white-space:nowrap;">
         <button onclick="lihatDetail(${p.id})" style="background:none;border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:12px;">Lihat</button>
         <button onclick="dgnLoading(this,'PDF...',()=>janaLaporanLawatan(${p.id}))" style="background:none;border:1px solid var(--brass-dark);color:var(--brass-dark);border-radius:8px;padding:6px 12px;font-size:12px;">PDF</button>
-        ${CURRENT_USER.peranan === 'Admin' ? `<button onclick="padamRekod(${p.id}, '${(p.namaSekolah||'').replace(/'/g,"\\'")}')" style="background:none;border:1px solid var(--bad);color:var(--bad);border-radius:8px;padding:6px 12px;font-size:12px;">Padam</button>` : ''}
+        ${CURRENT_USER.peranan === 'Admin' ? `<button onclick="padamRekod(${p.id})" style="background:none;border:1px solid var(--bad);color:var(--bad);border-radius:8px;padding:6px 12px;font-size:12px;">Padam</button>` : ''}
       </td>
     </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);">Tiada rekod.</td></tr>'}</tbody></table>`;
 }
 
-async function padamRekod(id, namaSekolah) {
-  if (!confirm(`Padam rekod pemantauan untuk "${namaSekolah}"?\n\nData pemantauan, dapatan, dan tindak susul berkaitan akan dipadam sepenuhnya.\n\nTindakan ini tidak boleh dibatalkan. Teruskan?`)) return;
-  const hasil = await callApi('padamPemantauanAdmin', { pemantauanId: id });
-  if (hasil.success) {
-    alert('Rekod pemantauan telah dipadam.');
-    muatSenarai();
-  } else {
-    alert('Ralat: ' + (hasil.message || 'Gagal memadam rekod.'));
-  }
+function padamRekod(id) {
+  const rekod = SENARAI_TERKINI.find(p => String(p.id) === String(id));
+  const namaSekolah = rekod ? rekod.namaSekolah : 'rekod ini';
+  const maklumat = rekod ? `${rekod.namaSekolah} (${rekod.kodSekolah})<br><span style="color:var(--muted);font-size:12.5px;">Dipantau oleh ${rekod.namaPegawai} · ${new Date(rekod.tarikhMasa).toLocaleString('ms-MY')}</span>` : '';
+
+  tunjukModalPengesahan({
+    tajuk: 'Padam Rekod Pemantauan?',
+    kandungan: `<p style="margin:0 0 12px;">Anda pasti mahu memadam rekod pemantauan berikut?</p>
+      <div class="card" style="padding:12px 14px;margin-bottom:12px;"><b>${maklumat}</b></div>
+      <p style="margin:0;color:var(--bad);font-size:13px;">⚠️ Data pemantauan, dapatan, dan tindak susul berkaitan akan dipadam sepenuhnya. Tindakan ini tidak boleh dibatalkan.</p>`,
+    labelYa: 'Ya, Padam',
+    labelTidak: 'Batal',
+    warnaYa: 'var(--bad)',
+    onYa: async (btn) => {
+      await dgnLoading(btn, 'Memadam...', async () => {
+        const hasil = await callApi('padamPemantauanAdmin', { pemantauanId: id });
+        if (hasil.success) {
+          tutupModal();
+          muatSenarai();
+        } else {
+          alert('Ralat: ' + (hasil.message || 'Gagal memadam rekod.'));
+        }
+      });
+    }
+  });
+}
+
+/* ================= MODAL PENGESAHAN (boleh guna semula) ================= */
+function tunjukModalPengesahan({ tajuk, kandungan, labelYa, labelTidak, warnaYa, onYa }) {
+  tutupModal(); // tutup jika ada modal lama
+  const overlay = document.createElement('div');
+  overlay.id = 'modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(10,22,40,.55);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;max-width:440px;width:100%;padding:26px;box-shadow:0 30px 60px rgba(0,0,0,.4);border-top:4px solid ${warnaYa || 'var(--navy-900)'};">
+      <h3 style="margin:0 0 14px;font-size:19px;color:var(--navy-900);">${tajuk}</h3>
+      <div style="font-size:14px;line-height:1.5;">${kandungan}</div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:22px;">
+        <button id="modal-tidak" class="btn-outline">${labelTidak || 'Batal'}</button>
+        <button id="modal-ya" style="background:${warnaYa || 'var(--navy-900)'};color:#fff;border:none;padding:9px 18px;border-radius:8px;font-weight:700;font-size:13px;">${labelYa || 'Ya'}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) tutupModal(); });
+  document.getElementById('modal-tidak').onclick = tutupModal;
+  document.getElementById('modal-ya').onclick = (e) => onYa(e.currentTarget);
+}
+
+function tutupModal() {
+  const m = document.getElementById('modal-overlay');
+  if (m) m.remove();
 }
 
 function eksportSenaraiExcel() {
